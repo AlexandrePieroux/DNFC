@@ -382,7 +382,7 @@ void rules_overlap(
          if (overlap && common_fields)
          {
             fprintf(stderr, "Warning: Rule %u overlap rule %u \n", current_rule->id, tested_rule->id);
-            current_rule = NULL;
+            (*rules)[i] = NULL;
             count--;
             break;
          }
@@ -390,7 +390,7 @@ void rules_overlap(
    }
 
    // Setting the set of rules without overlaps 
-   *out_rules = chkmalloc(sizeof *out_rules * count);
+   (*out_rules) = chkmalloc(sizeof(*out_rules) * count);
    uint32_t index = 0;
    for (uint32_t i = 0; i < *nb_rules; ++i)
    {
