@@ -78,8 +78,7 @@ classifier_rule** get_random_rules(uint32_t size, uint32_t dimension_limit)
     uint32_t *action = new uint32_t;
     *action = i;
 
-    // uint32_t random_nb_dimensions = rand() % dimension_limit;
-    uint32_t random_nb_dimensions = dimension_limit;
+    uint32_t random_nb_dimensions = rand() % dimension_limit;
     result[i]->fields = new classifier_field*[random_nb_dimensions];
     result[i]->nb_fields = random_nb_dimensions;
     result[i]->action = action;
