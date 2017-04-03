@@ -147,6 +147,11 @@ uint32_t get_multi_dimension_index(
     uint32_t nb_dimensions,
     uint32_t *cuts_indexes);
 
+// Return ceil(divident/divisor)
+uint32_t integer_division_ceil(
+    uint32_t dividend, 
+    uint32_t divisor);
+
 // Get the next index in a multi-dimensional space
 bool get_next_dimension_index(
     uint32_t *dimension_indexes,
@@ -199,6 +204,7 @@ uint32_t hash_interval(
     uint32_t value,
     uint32_t mask);
 
+// Return true if the rule have a field for the dimensions 'id'
 bool get_field_id(struct classifier_rule *rule,
                   uint32_t id,
                   uint32_t *out);
@@ -722,10 +728,10 @@ uint32_t get_optimal_cut(
     uint32_t optimal_cut = 0;
 
     uint32_t rule_mean = nb_rules;
-    uint32_t prev_rule_mean = (uint32_t)~0;
+    uint32_t prev_rule_mean = (uint32_t)~0x0;
 
     uint32_t nb_max_rules = nb_rules;
-    uint32_t prev_nb_max_rules = (uint32_t)~0;
+    uint32_t prev_nb_max_rules = (uint32_t)~0x0;
 
     uint32_t nb_empty_children = 0;
     uint32_t prev_nb_empty_children = 0;
@@ -807,7 +813,8 @@ void get_cut_characteristics(
 
     for (uint32_t j = 0; j < nb_children; ++j)
     {
-        // The size of the children and the size of the dimensions is always a power of two, so no need to check if the max is outside the dimension
+        // The size of the children and the size of the dimensions is always a power of two, 
+        // so no need to check if the max is outside the dimension
         uint32_t child_subregion_min = dimension->min_dim + (subregion_size * j);
         uint32_t child_subregion_max = child_subregion_min + (subregion_size - 1);
 
@@ -918,7 +925,7 @@ void get_combination_cuts_characteristics(
     // Check if we exceed the limit
     if (nb_dim_cut > 31)
     {
-        fprintf(stderr, "[ERROR] The number dimensions to cut exceed the limit (limit:31 dimensions:%d).", nb_dim_cut);
+        fprintf(stderr, "[ERROR] The number of dimensions to cut exceed the limit (limit:31 dimensions:%d).", nb_dim_cut);
         exit(-1);
     }
     // Array of children
@@ -940,7 +947,10 @@ void get_combination_cuts_characteristics(
     {
         for (uint32_t j = 0; j < nb_dim_cut; ++j)
         {
+            // Compute the dimensions regions size
             uint32_t field_index;
+
+            // If the rule does not have the dimension we replace it by a wildcard
             if (!get_field_id(rules[i], dimensions[j]->id, &field_index))
             {
                 min_value = dimensions[j]->min_dim;
@@ -952,9 +962,12 @@ void get_combination_cuts_characteristics(
                 max_value = rules[i]->fields[field_index]->value | rules[i]->fields[field_index]->mask;
             }
             nb_subregions = (uint32_t)0x1 << cuts[j];
-            subregion_size = (dimensions[j]->max_dim - dimensions[j]->min_dim) + 1;
-            subregion_size = subregion_size / nb_subregions;
+            subregion_size = dimensions[j]->max_dim - dimensions[j]->min_dim;
+            if(subregion_size < (uint32_t)~0x0)
+                subregion_size++;
+            subregion_size = integer_division_ceil(subregion_size, nb_subregions);
 
+            // Minimum subregion size
             if (subregion_size == 0)
                 subregion_size = 1;
 
@@ -981,10 +994,12 @@ void get_combination_cuts_characteristics(
         children_array[index]++;
 
         // Locate all the other children that the rule span
+        uint32_t counter = 0;
         while (get_next_dimension_index(current_index, min_index, max_index, nb_dim_cut))
         {
             index = get_multi_dimension_index(current_index, nb_dim_cut, cuts);
             children_array[index]++;
+            counter++;
         }
     }
 
@@ -995,9 +1010,7 @@ void get_combination_cuts_characteristics(
     // Compute maximum number of children a node can get and the sum of all the childrens
     for (uint32_t i = 0; i < nb_children; ++i)
     {
-        // Can it be replaced by 'nb_children' ?
         rules_sum += children_array[i];
-        // Can it be computed on the fly in the for loops above ?
         if (max_rule_child < children_array[i])
             max_rule_child = children_array[i];
     }
@@ -1011,19 +1024,11 @@ void get_combination_cuts_characteristics(
     }
 }
 
-uint32_t get_multi_dimension_index(
-    uint32_t *dimensions_indexes,
-    uint32_t nb_dimensions,
-    uint32_t *cuts_indexes)
+uint32_t integer_division_ceil(
+    uint32_t dividend, 
+    uint32_t divisor)
 {
-    uint32_t dim_size = 1;
-    uint32_t index = 0;
-    for (uint32_t i = 0; i < nb_dimensions; ++i)
-    {
-        index += (dimensions_indexes[i] * dim_size);
-        dim_size *= (uint32_t)0x1 << cuts_indexes[i];
-    }
-    return index;
+    return (dividend + (divisor - 1)) / divisor;
 }
 
 bool get_next_dimension_index(
@@ -1043,6 +1048,21 @@ bool get_next_dimension_index(
         }
     }
     return false;
+}
+
+uint32_t get_multi_dimension_index(
+    uint32_t *dimensions_indexes,
+    uint32_t nb_dimensions,
+    uint32_t *cuts_indexes)
+{
+    uint32_t dim_size = 1;
+    uint32_t index = 0;
+    for (uint32_t i = 0; i < nb_dimensions; ++i)
+    {
+        index += (dimensions_indexes[i] * dim_size);
+        dim_size *= (uint32_t)0x1 << cuts_indexes[i];
+    }
+    return index;
 }
 
 void get_next_dimension(
