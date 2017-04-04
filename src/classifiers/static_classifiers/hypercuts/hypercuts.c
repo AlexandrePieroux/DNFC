@@ -379,8 +379,8 @@ void rules_overlap(
             // If a rule completely overlap another, we suppress the second one as it will never be used
             if (overlap && common_fields)
             {
-                fprintf(stderr, "Warning: Rule %u overlap rule %u \n", current_rule->id, tested_rule->id);
-                (*rules)[i] = NULL;
+                fprintf(stderr, "Warning: Rule %u shadow rule %u (Deleting rule %d from the set)\n", current_rule->id, tested_rule->id, tested_rule->id);
+                (*rules)[j] = NULL;
                 count--;
                 break;
             }
@@ -947,9 +947,7 @@ void get_combination_cuts_characteristics(
     {
         for (uint32_t j = 0; j < nb_dim_cut; ++j)
         {
-            // Compute the dimensions regions size
             uint32_t field_index;
-
             // If the rule does not have the dimension we replace it by a wildcard
             if (!get_field_id(rules[i], dimensions[j]->id, &field_index))
             {
@@ -981,11 +979,14 @@ void get_combination_cuts_characteristics(
             // Compute the minimal and maximal index of the rule in this dimension
             min_index[j] = (min_value - dimensions[j]->min_dim) / subregion_size;
 
-            uint32_t max_interval;
-            uint32_t max_min_diff = max_value - dimensions[j]->min_dim;
-            if (max_min_diff > 0)
-                max_interval = max_min_diff - 1;
+            uint32_t max_interval = max_value - dimensions[j]->min_dim;
+            if (max_interval > 0)
+                max_interval--;
             max_index[j] = max_interval / subregion_size;
+            if(max_index[j] > 0)
+                max_index[j]--;
+            if (max_index[j] >= nb_subregions)
+                fprintf(stderr, "lel");
             current_index[j] = min_index[j];
         }
 
