@@ -20,7 +20,4 @@ In order to test the code several things are required:
       - available there https://github.com/luigirizzo/netmap
    - kernel configuration:
       - kernel have to be configured with 'device netmap' 
-         
-   - vagrant
-   - virtualbox
    
