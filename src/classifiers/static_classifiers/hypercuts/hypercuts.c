@@ -1227,7 +1227,7 @@ void shrink_space_node(
         for (uint32_t j = 0; j < rules_in_node[i]->nb_fields; ++j)
         {
             uint32_t id = rules_in_node[i]->fields[j]->id;
-            
+
             // Get the min
             if (mins[id] > rules_in_node[i]->fields[j]->value)
                 mins[id] = rules_in_node[i]->fields[j]->value;
@@ -1241,8 +1241,14 @@ void shrink_space_node(
 
     for(uint32_t i = 0; i < nb_dimensions; ++i)
     {
-        dimensions[i]->min_dim = mins[i];
-        dimensions[i]->max_dim = maxes[i];
+        if(mins[i] == (uint32_t) ~0x0 && maxes[i] == 0)
+        {
+            dimensions[i]->min_dim = 0;
+            dimensions[i]->max_dim = 0;
+        } else {
+            dimensions[i]->min_dim = mins[i];
+            dimensions[i]->max_dim = maxes[i];
+        }
     }
 }
 
