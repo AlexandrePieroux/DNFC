@@ -239,6 +239,9 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **r
     // Second heuristic: eliminate overlapping rules (rules that will never be matched because of former bigger rules).
     rules_overlap(&rules, &nb_rules, &out_rules);
 
+    // Third heuristic: we shrink the space covered by the node
+    shrink_space_node(dimensions, nb_dimensions, out_rules, nb_rules);
+
     // Recursive node construction
     uint32_t *nb_leaves = chkmalloc(sizeof(*nb_leaves));
     *nb_leaves = 0;
@@ -408,9 +411,6 @@ struct hypercuts_node *build_node(
     struct hypercuts_dimension **dimensions,
     uint32_t nb_dimensions)
 {
-    // Third heuristic: we shrink the space covered by the node
-    shrink_space_node(dimensions, nb_dimensions, rules, nb_rules);
-
     // We create a leaf if there are less rules than BINTH
     if (nb_rules <= BINTH)
         return add_leaf_node(leaves, nb_leaves, rules, nb_rules);
