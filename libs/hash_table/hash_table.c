@@ -162,7 +162,7 @@
            free((*table)->index[i]);
      }
      free((*table)->index);
-     free((*table));
+     free(*table);
   }
 
 

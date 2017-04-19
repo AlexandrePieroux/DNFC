@@ -37,9 +37,11 @@ TEST (LinkedListTest, Insert)
   threadpool_t* pool = new_threadpool(NB_THREADS);
   init(args);
   for (uint32_t i = 0; i < NB_THREADS; ++i)
-  threadpool_add_work(pool, &job_insert, args[i]);
+    threadpool_add_work(pool, &job_insert, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
+
+  linked_list_free(args[0]->table);
 }
 
 TEST (LinkedListTest, Get)
@@ -49,13 +51,15 @@ TEST (LinkedListTest, Get)
   init(args);
 
   for (uint32_t i = 0; i < NB_THREADS; ++i)
-  threadpool_add_work(pool, &job_insert, args[i]);
+    threadpool_add_work(pool, &job_insert, args[i]);
   threadpool_wait(pool);
 
   for (uint32_t i = 0; i < NB_THREADS; ++i)
-  threadpool_add_work(pool, &job_get, args[i]);
+    threadpool_add_work(pool, &job_get, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
+
+  linked_list_free(args[0]->table);
 }
 
 TEST (LinkedListTest, Remove)
@@ -65,13 +69,15 @@ TEST (LinkedListTest, Remove)
   init(args);
 
   for (uint32_t i = 0; i < NB_THREADS; ++i)
-  threadpool_add_work(pool, &job_insert, args[i]);
+    threadpool_add_work(pool, &job_insert, args[i]);
   threadpool_wait(pool);
 
   for (uint32_t i = 0; i < NB_THREADS; ++i)
-  threadpool_add_work(pool, &job_remove, args[i]);
+    threadpool_add_work(pool, &job_remove, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
+
+  linked_list_free(args[0]->table);
 }
 
 
@@ -123,9 +129,9 @@ void init(arguments_t** &args)
     args[p] = new arguments_t;
     args[p]->numbers = &(numbers[p * divider]);
     if(p != (NB_THREADS - 1))
-    args[p]->size = divider;
+      args[p]->size = divider;
     else
-    args[p]->size = divider + remain;
+      args[p]->size = divider + remain;
     args[p]->table = table;
   }
 }

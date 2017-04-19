@@ -25,8 +25,8 @@ Inheritance header
 * AUTHOR :    Pieroux Alexandre
 *H*/
 
-#define BINTH 5   // Maximum children in node threshold 
-#define SPFAC 1   // Space 
+#define BINTH 10   // Maximum rules in node threshold
+#define SPFAC 2   //  Maximum number of children space factor
 
 #define VALUE_RAD 1       // Radius around the value of the number of optimal cuts to test (tradeoff the optimisation level and time to build the tree)
 #define OPT_THRESHOLD 0.2 // Define in percent the difference threashold before the optimisation stop (tradeoff the optimisation level and time to build of the tree)

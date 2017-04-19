@@ -687,6 +687,7 @@ uint32_t get_dimensions(
             node->dimensions[count] = new_dimension(dimensions[i]->id, 0, dimensions[i]->min_dim, dimensions[i]->max_dim);
             count++;
         }
+        hash_table_free(&tables[i]);
     }
     return count;
 }

@@ -41,6 +41,8 @@ TEST (HashTableTest, Insert)
      threadpool_add_work(pool, job_insert, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
+    
+  hash_table_free(args[0]->table);
 }
 
 TEST (HashTableTest, Get)
@@ -57,6 +59,8 @@ TEST (HashTableTest, Get)
      threadpool_add_work(pool, job_get, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
+    
+  hash_table_free(args[0]->table);
 }
 
 TEST (HashTableTest, Remove)
@@ -73,6 +77,8 @@ TEST (HashTableTest, Remove)
      threadpool_add_work(pool, job_remove, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
+    
+  hash_table_free(args[0]->table);
 }
 
 
