@@ -7,8 +7,8 @@ extern "C" {
 }
 
 #include "gtest/gtest.h"
-#define NB_RULES 100
-#define NB_DIMENSIONS 10
+#define NB_RULES 50
+#define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64
 
 uint32_t *get_random_numbers(uint32_t size);

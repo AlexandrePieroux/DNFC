@@ -43,8 +43,7 @@ struct hypercuts_node *new_leaf(
 
 // Allocate a new node to be inserted in the tree
 struct hypercuts_node *new_node(
-    uint32_t nb_dimensions,
-    uint32_t nb_children);
+    uint32_t nb_dimensions);
 
 // Allocate a new dimension struture - It contain the information of the dimension in a node
 struct hypercuts_dimension *new_dimension(
@@ -416,17 +415,26 @@ struct hypercuts_node *build_node(
         return add_leaf_node(leaves, nb_leaves, rules, nb_rules);
 
     // Otherwise we create a node
-    // Compute the max number of children of the node
-    uint32_t max_nb_children = (uint32_t)((SPFAC * sqrt(nb_rules)) + 0.5);
-    struct hypercuts_node *node = new_node(nb_dimensions, max_nb_children);
+    struct hypercuts_node *node = new_node(nb_dimensions);
 
     // get the dimensions used to cut the node
-    uint32_t nb_dim_cut = get_dimensions(node, dimensions, nb_dimensions, rules, nb_rules);
+    uint32_t nb_dim_cut = get_dimensions(node,
+                                         dimensions,
+                                         nb_dimensions,
+                                         rules,
+                                         nb_rules);
     if (nb_dim_cut == 0)
+    {
+        free(node->dimensions);
+        free(node);
         return add_leaf_node(leaves, nb_leaves, rules, nb_rules);
+    }
 
     // Set the number of cuts to do in each dimensions
-    set_nb_cuts(node, rules, nb_rules, nb_dim_cut);
+    set_nb_cuts(node,
+                rules,
+                nb_rules,
+                nb_dim_cut);
 
     // Compute the number of children after the cuts
     uint32_t nb_children = 0;
@@ -434,7 +442,14 @@ struct hypercuts_node *build_node(
         nb_children += node->dimensions[i]->cuts;
     nb_children = (uint32_t)0x1 << nb_children;
     if (nb_children == 1)
+    {
+        free(node->dimensions);
+        free(node);
         return add_leaf_node(leaves, nb_leaves, rules, nb_rules);
+    }
+    
+    // Allocate space for the children
+    node->children = chkcalloc(nb_children, sizeof node->children);
 
     // Compute the size of all cuts and keep track of dimensions indexes
     uint32_t dimension_region_size[nb_dim_cut];
@@ -450,11 +465,11 @@ struct hypercuts_node *build_node(
     }
 
     // Build each children
-    struct classifier_rule **subset_rules = chkcalloc(nb_rules, sizeof(**subset_rules));
+    struct classifier_rule *subset_rules[nb_rules];
     for (uint32_t i = 0; i < nb_children; ++i)
     {
         // Copy the dimension array
-        struct hypercuts_dimension **dimensions_child = chkmalloc(sizeof(**dimensions_child) * nb_dimensions);
+        struct hypercuts_dimension *dimensions_child[nb_dimensions];
         for (uint32_t j = 0; j < nb_dimensions; ++j)
         {
             dimensions_child[j] = chkmalloc(sizeof(dimensions_child[j]));
@@ -502,27 +517,22 @@ struct hypercuts_node *build_node(
                 }
             }
             
-            // If the rule fit in the child, we add it to the subsetof rules
+            // If the rule fit in the child, we add it to the subset of rules
             if (inside_child)
             {
                 subset_rules[subset_rules_count] = rules[j];
                 subset_rules_count++;
             }
         }
-
         // Recursion on the new child
-        node->children[i] = build_node(subset_rules, 
+        node->children[i] = build_node(subset_rules,
                                        subset_rules_count, 
                                        leaves, 
                                        nb_leaves, 
                                        dimensions_child, 
                                        nb_dimensions);
         get_next_dimension(dimensions_indexes, nb_dim_cut, node);
-        for (uint32_t k = 0; k < nb_dimensions; ++k)
-            free(dimensions_child[k]);
-        free(dimensions_child);
     }
-    free(subset_rules);
     return node;
 }
 
@@ -541,12 +551,10 @@ struct hypercuts_node *new_leaf(
 }
 
 struct hypercuts_node *new_node(
-    uint32_t nb_dimensions,
-    uint32_t nb_children)
+    uint32_t nb_dimensions)
 {
     struct hypercuts_node *node = chkmalloc(sizeof(*node));
     node->dimensions = chkcalloc(nb_dimensions + 1, sizeof node->dimensions);
-    node->children = chkcalloc(nb_children, sizeof node->children);
     node->rules = NULL;
     return node;
 }
