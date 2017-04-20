@@ -247,7 +247,9 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **r
     classifier->root = build_node(out_rules, nb_rules, leaves, nb_leaves, dimensions, nb_dimensions);
     classifier->fields_set = fields_set;
     classifier->nb_dimensions = nb_dimensions;
-
+    for(uint32_t i = 0; i < nb_dimensions; ++i)
+        free(dimensions[i]);
+    free(dimensions);
     return classifier;
 }
 
@@ -532,6 +534,8 @@ struct hypercuts_node *build_node(
                                        dimensions_child, 
                                        nb_dimensions);
         get_next_dimension(dimensions_indexes, nb_dim_cut, node);
+        for (uint32_t j = 0; j < nb_dimensions; ++j)
+            free(dimensions_child[j]);
     }
     return node;
 }
@@ -734,6 +738,7 @@ void set_nb_cuts(
         node->dimensions[i]->cuts = optimal_cuts[i];
 
     free(cuts);
+    free(cuts_min);
     free(cuts_max);
     free(optimal_cuts);
 }
