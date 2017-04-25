@@ -23,8 +23,12 @@ TEST(Hypecuts, RandomRules)
   hypercuts_classifier *classifier = new_hypercuts_classifier(rules, NB_RULES);
   hypercuts_print(classifier);
 
-  for (uint32_t i = 0; i < NB_RULES; ++i)
-    EXPECT_EQ(*(uint32_t *)hypercuts_search(classifier, get_header(*rules[i]), HEADER_LENGTH), i);
+    for (uint32_t i = 0; i < NB_RULES; ++i){
+        u_char *h = get_header(*rules[i]);
+        uint32_t r = *(uint32_t *)hypercuts_search(classifier, h, HEADER_LENGTH);
+        EXPECT_EQ(r, i);
+        free(h);
+    }
 }
 
 int main(int argc, char **argv)
@@ -125,7 +129,7 @@ u_char *get_header(classifier_rule rule)
     uint32_t index = rule.fields[i]->offset / 8;
     uint32_t shift = rule.fields[i]->offset % 8;
 
-    value = value << (32 - rule.fields[i]->bit_length - shift - 1);
+    value = value << (32 - rule.fields[i]->bit_length - shift);
     result[index + 3] = value & 0xff;
     result[index + 2] = (value >> 8) & 0xff;
     result[index + 1] = (value >> 16) & 0xff;

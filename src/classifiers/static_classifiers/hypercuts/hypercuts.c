@@ -437,6 +437,24 @@ struct hypercuts_node *build_node(
                 rules,
                 nb_rules,
                 nb_dim_cut);
+    
+    /* TEST MEMORY OPTIMISATION */
+    uint32_t nb_dim_after_cuts = 0;
+    struct hypercuts_dimension* dimensions_after_cuts[nb_dim_cut];
+    for(uint32_t i = 0; i < nb_dim_cut; i++)
+    {
+        if(node->dimensions[i]->cuts > 0)
+        {
+            dimensions_after_cuts[nb_dim_after_cuts] = node->dimensions[i];
+            nb_dim_after_cuts++;
+        }
+    }
+    for (uint32_t i = 0; i < nb_dim_after_cuts; i++)
+        node->dimensions[i] = dimensions_after_cuts[i];
+    node->dimensions = chkrealloc(node->dimensions, sizeof(node->dimensions) * nb_dim_after_cuts + 1);
+    node->dimensions[nb_dim_after_cuts] = NULL;
+    nb_dim_cut = nb_dim_after_cuts;
+    /* TEST MEMORY OPTIMISATION */
 
     // Compute the number of children after the cuts
     uint32_t nb_children = 0;
@@ -558,7 +576,7 @@ struct hypercuts_node *new_node(
     uint32_t nb_dimensions)
 {
     struct hypercuts_node *node = chkmalloc(sizeof(*node));
-    node->dimensions = chkcalloc(nb_dimensions + 1, sizeof node->dimensions);
+    node->dimensions = chkcalloc(nb_dimensions, sizeof node->dimensions);
     node->rules = NULL;
     return node;
 }
@@ -1195,7 +1213,7 @@ uint32_t get_uint32_value(
     uint32_t length)
 {
     uint32_t char_index_start = offset / 8;
-    uint32_t char_index_end = (offset + length) / 8;
+    uint32_t char_index_end = (offset + length - 1) / 8;
 
     // Getting the first part of the value and cleaning leading bits
     uint32_t result = header[char_index_start];
