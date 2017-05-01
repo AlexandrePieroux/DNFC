@@ -294,7 +294,7 @@ void normalize_rules(
             insert_field_collection(&field_collection, rules[i]->fields[j], &inserted_element);
             if (inserted_element >= NB_MAX_UNIQUE_DIMENSIONS)
             {
-                fprintf(stderr, "Limit of unique rule exceeded: %d (limit: %d)", inserted_element, NB_MAX_UNIQUE_DIMENSIONS);
+                fprintf(stderr, "Limit of unique dimensions exceeded: %d (limit: %d)", inserted_element, NB_MAX_UNIQUE_DIMENSIONS);
                 exit(-1);
             }
         }
@@ -306,7 +306,8 @@ void normalize_rules(
     for (uint32_t k = 0; k < inserted_element; ++k)
     {
         (*fields_set)[k] = field_collection[k];
-        (*dimensions)[k] = new_dimension(k, 0, 0, (uint32_t)~0x0);
+        uint32_t max_field = ((uint32_t)0x1 << field_collection[k]->bit_length) - 1;
+        (*dimensions)[k] = new_dimension(k, 0, 0, max_field);
     }
     *nb_dimensions = inserted_element;
 }
@@ -404,6 +405,49 @@ void rules_overlap(
     *nb_rules = count;
 }
 
+void shrink_space_node(
+   struct hypercuts_dimension **dimensions,
+   uint32_t nb_dimensions,
+   struct classifier_rule **rules_in_node,
+   uint32_t nb_rules)
+{
+    if (!rules_in_node)
+        return;
+    
+    uint32_t mins[nb_dimensions];
+    uint32_t maxes[nb_dimensions];
+    
+    for(uint32_t i = 0; i < nb_dimensions; ++i)
+    {
+        mins[i] = (uint32_t)~0x0;
+        maxes[i] = 0;
+    }
+    
+    for (uint32_t i = 0; i < nb_rules; ++i)
+    {
+        for (uint32_t j = 0; j < nb_dimensions; ++j)
+        {
+            uint32_t id = dimensions[j]->id;
+            if(!get_field_id(rules_in_node[i], dimensions[j]->id, &id))
+            {
+                // Get the min and the max of the normalized field
+                mins[id] = dimensions[j]->min_dim;
+                mins[id] = dimensions[j]->max_dim;
+            } else {
+                // Get the min
+                uint32_t field_min = rules_in_node[i]->fields[id]->value;
+                if (mins[id] > field_min)
+                    mins[id] = field_min;
+                
+                // Get the max
+                uint32_t field_max = rules_in_node[i]->fields[id]->value | rules_in_node[i]->fields[id]->mask;
+                if (maxes[id] < field_max)
+                    maxes[id] = field_max;
+            }
+        }
+    }
+}
+
 struct hypercuts_node *build_node(
     struct classifier_rule **rules,
     uint32_t nb_rules,
@@ -438,7 +482,7 @@ struct hypercuts_node *build_node(
                 nb_rules,
                 nb_dim_cut);
     
-    /* TEST MEMORY OPTIMISATION */
+    // Memory optimization
     uint32_t nb_dim_after_cuts = 0;
     struct hypercuts_dimension* dimensions_after_cuts[nb_dim_cut];
     for(uint32_t i = 0; i < nb_dim_cut; i++)
@@ -454,7 +498,6 @@ struct hypercuts_node *build_node(
     node->dimensions = chkrealloc(node->dimensions, sizeof(node->dimensions) * nb_dim_after_cuts + 1);
     node->dimensions[nb_dim_after_cuts] = NULL;
     nb_dim_cut = nb_dim_after_cuts;
-    /* TEST MEMORY OPTIMISATION */
 
     // Compute the number of children after the cuts
     uint32_t nb_children = 0;
@@ -519,8 +562,8 @@ struct hypercuts_node *build_node(
                 uint32_t max_rule_dim;
                 if (!get_field_id(rules[j], node->dimensions[k]->id, &index))
                 {
-                    min_rule_dim = 0;
-                    max_rule_dim = (uint32_t)~0x0;
+                    min_rule_dim = node->dimensions[k]->min_dim;
+                    max_rule_dim = node->dimensions[k]->max_dim;
                 }
                 else
                 {
@@ -1001,6 +1044,11 @@ void get_combination_cuts_characteristics(
                 min_value = rules[i]->fields[field_index]->value;
                 max_value = rules[i]->fields[field_index]->value | rules[i]->fields[field_index]->mask;
             }
+            
+            // Check if the rule land in the child
+            if(min_value > dimensions[j]->max_dim || max_value < dimensions[j]->min_dim)
+                continue;
+            
             nb_subregions = (uint32_t)0x1 << cuts[j];
             subregion_size = dimensions[j]->max_dim - dimensions[j]->min_dim;
             if(subregion_size < (uint32_t)~0x0)
@@ -1136,15 +1184,19 @@ struct hypercuts_node *get_leaf(
         for (uint32_t i = 0; i < nb_dimensions_node; ++i)
         {
             // If the packet is not in the shrinked space
-            if (header_values[i] < node->dimensions[i]->min_dim ||
-                header_values[i] > node->dimensions[i]->max_dim)
+            uint32_t index = node->dimensions[i]->id;
+            if (header_values[index] < node->dimensions[i]->min_dim ||
+                header_values[index] > node->dimensions[i]->max_dim)
                 return NULL;
 
             // Else we compute the index of the child
             uint32_t nb_cuts = (uint32_t)0x1 << node->dimensions[i]->cuts;
-            uint32_t subregion_size = (node->dimensions[i]->max_dim - node->dimensions[i]->min_dim) + 1;
-            subregion_size = subregion_size / nb_cuts;
-            dimensions_index[i] = (header_values[i] - node->dimensions[i]->min_dim) / subregion_size;
+            
+            uint32_t subregion_size = node->dimensions[i]->max_dim - node->dimensions[i]->min_dim;
+            if(subregion_size < (uint32_t)~0x0)
+                subregion_size++;
+            subregion_size = integer_division_ceil(subregion_size, nb_cuts);
+            dimensions_index[i] = (header_values[index] - node->dimensions[i]->min_dim) / subregion_size;
         }
         node = get_children(dimensions_index, node, nb_dimensions_node);
     }
@@ -1160,9 +1212,9 @@ void *linear_search(
         return NULL;
 
     struct classifier_rule *current_rule = *(leaf->rules);
-    bool match = true;
     while (current_rule)
     {
+        bool match = true;
         struct classifier_field **current_field = current_rule->fields;
         for (uint32_t i = 0; i < nb_dimensions; ++i)
         {
@@ -1236,54 +1288,6 @@ uint32_t get_uint32_value(
     return result;
 }
 
-void shrink_space_node(
-    struct hypercuts_dimension **dimensions,
-    uint32_t nb_dimensions,
-    struct classifier_rule **rules_in_node,
-    uint32_t nb_rules)
-{
-    if (!rules_in_node)
-        return;
-
-    uint32_t mins[nb_dimensions];
-    uint32_t maxes[nb_dimensions];
-
-    for(uint32_t i = 0; i < nb_dimensions; ++i)
-    {
-        mins[i] = (uint32_t)~0x0;
-        maxes[i] = 0;
-    }
-
-    for (uint32_t i = 0; i < nb_rules; ++i)
-    {
-        for (uint32_t j = 0; j < rules_in_node[i]->nb_fields; ++j)
-        {
-            uint32_t id = rules_in_node[i]->fields[j]->id;
-
-            // Get the min
-            if (mins[id] > rules_in_node[i]->fields[j]->value)
-                mins[id] = rules_in_node[i]->fields[j]->value;
-
-            // Get the max
-            uint32_t field_max = rules_in_node[i]->fields[j]->value | rules_in_node[i]->fields[j]->mask;
-            if (maxes[id] < field_max)
-                maxes[id] = field_max;
-        }
-    }
-
-    for(uint32_t i = 0; i < nb_dimensions; ++i)
-    {
-        if(mins[i] == (uint32_t) ~0x0 && maxes[i] == 0)
-        {
-            dimensions[i]->min_dim = 0;
-            dimensions[i]->max_dim = 0;
-        } else {
-            dimensions[i]->min_dim = mins[i];
-            dimensions[i]->max_dim = maxes[i];
-        }
-    }
-}
-
 bool get_field_id(struct classifier_rule *rule, uint32_t id, uint32_t *out)
 {
     for (uint32_t i = 0; i < rule->nb_fields; ++i)
@@ -1293,6 +1297,8 @@ bool get_field_id(struct classifier_rule *rule, uint32_t id, uint32_t *out)
             *out = i;
             return true;
         }
+        if (rule->fields[i]->id > id)
+            return false;
     }
     return false;
 }
