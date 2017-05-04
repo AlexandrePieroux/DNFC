@@ -291,10 +291,19 @@ void normalize_rules(
     {
         for (uint32_t j = 0; j < rules[i]->nb_fields; ++j)
         {
+            // Check if rule is coherent
+            uint32_t max = ((uint32_t)0x1 << rules[i]->fields[j]->bit_length) - 1;
+            uint32_t field_max = rules[i]->fields[j]->value | rules[i]->fields[j]->mask;
+            if (max < field_max)
+            {
+                fprintf(stderr, "Field %d of rule %d is not coherent (bit length max: %d < field max value:%d)\n", j, i, max, field_max);
+                exit(-1);
+            }
+                
             insert_field_collection(&field_collection, rules[i]->fields[j], &inserted_element);
             if (inserted_element >= NB_MAX_UNIQUE_DIMENSIONS)
             {
-                fprintf(stderr, "Limit of unique dimensions exceeded: %d (limit: %d)", inserted_element, NB_MAX_UNIQUE_DIMENSIONS);
+                fprintf(stderr, "Limit of unique dimensions exceeded: %d (limit: %d)\n", inserted_element, NB_MAX_UNIQUE_DIMENSIONS);
                 exit(-1);
             }
         }
@@ -1211,16 +1220,16 @@ void *linear_search(
     if (!leaf->rules)
         return NULL;
 
-    struct classifier_rule *current_rule = *(leaf->rules);
+    uint32_t i = 0;
+    struct classifier_rule *current_rule = leaf->rules[0];
     while (current_rule)
     {
         bool match = true;
-        struct classifier_field **current_field = current_rule->fields;
         for (uint32_t i = 0; i < nb_dimensions; ++i)
         {
             // Get the value, mask it then compare it to the value: if it does not match then break
-            uint32_t header_32 = header_values[i] & ~(current_field[i]->mask);
-            if (header_32 != current_field[i]->value)
+            uint32_t header_32 = header_values[i] & ~(current_rule->fields[i]->mask);
+            if (header_32 != current_rule->fields[i]->value)
             {
                 match = false;
                 break;
@@ -1232,7 +1241,8 @@ void *linear_search(
             return current_rule->action;
 
         // Next rule
-        current_rule++;
+        i++;
+        current_rule = leaf->rules[i];
     }
     return NULL;
 }

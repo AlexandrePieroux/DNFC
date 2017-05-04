@@ -7,7 +7,7 @@ extern "C" {
 }
 
 #include "gtest/gtest.h"
-#define NB_RULES 100
+#define NB_RULES 20
 #define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64
 
@@ -86,11 +86,15 @@ classifier_rule **get_random_rules(uint32_t size, uint32_t dimension_limit)
       result[i]->fields[j]->offset = dimensions[j]->offset;
 
       // Generate random values for the dimension
-      uint32_t max = (uint32_t)(0x1 << (result[i]->fields[j]->bit_length + 1)) - 1;
-      uint32_t first = rand() % max;
-      uint32_t second = rand() % max;
-      result[i]->fields[j]->value = (first < second) ? first : second;
-      result[i]->fields[j]->mask = (first < second) ? second : first;
+      uint32_t max = (uint32_t)(0x1 << result[i]->fields[j]->bit_length) - 1;
+      uint32_t value = rand() % max;
+      uint32_t pre_mask = ((uint32_t)0x1 << (result[i]->fields[j]->bit_length / 2)) - 1;
+      uint32_t mask = (uint32_t) value & pre_mask;
+      uint32_t field_value = 0;
+      if(value != 0)
+          field_value = (uint32_t) value & ~mask;
+      result[i]->fields[j]->mask = mask;
+      result[i]->fields[j]->value = field_value;
     }
   }
 
