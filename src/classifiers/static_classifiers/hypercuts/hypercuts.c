@@ -348,6 +348,7 @@ void rules_overlap(
 {
     // For each rules
     uint32_t count = *nb_rules;
+    uint32_t suppressed_rules_counter = 0;
     for (uint32_t i = 0; i < *nb_rules; ++i)
     {
         // We compare each rules
@@ -394,6 +395,7 @@ void rules_overlap(
             {
                 fprintf(stderr, "Warning: Rule %u shadow rule %u (Deleting rule %d from the set)\n", current_rule->id, tested_rule->id, tested_rule->id);
                 (*rules)[j] = NULL;
+                suppressed_rules_counter++;
                 count--;
                 break;
             }
@@ -412,6 +414,8 @@ void rules_overlap(
         }
     }
     *nb_rules = count;
+    if (suppressed_rules_counter != 0)
+        fprintf(stderr, "Warning: %d rules were deleted during the normalization process\n", suppressed_rules_counter);
 }
 
 void shrink_space_node(
@@ -1225,10 +1229,10 @@ void *linear_search(
     while (current_rule)
     {
         bool match = true;
-        for (uint32_t i = 0; i < nb_dimensions; ++i)
+        for (uint32_t i = 0; i < current_rule->nb_fields; ++i)
         {
             // Get the value, mask it then compare it to the value: if it does not match then break
-            uint32_t header_32 = header_values[i] & ~(current_rule->fields[i]->mask);
+            uint32_t header_32 = header_values[current_rule->fields[i]->id] & ~(current_rule->fields[i]->mask);
             if (header_32 != current_rule->fields[i]->value)
             {
                 match = false;

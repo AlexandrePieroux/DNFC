@@ -7,7 +7,7 @@ extern "C" {
 }
 
 #include "gtest/gtest.h"
-#define NB_RULES 20
+#define NB_RULES 100
 #define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64
 
@@ -129,7 +129,7 @@ u_char *get_header(classifier_rule rule)
   u_char *result = new u_char[size];
   for (size_t i = 0; i < rule.nb_fields; i++)
   {
-    uint32_t value = rand_interval(rule.fields[i]->value, rule.fields[i]->mask);
+    uint32_t value = rand_interval(rule.fields[i]->value, rule.fields[i]->mask | rule.fields[i]->value);
     uint32_t index = rule.fields[i]->offset / 8;
     uint32_t shift = rule.fields[i]->offset % 8;
 
