@@ -7,7 +7,7 @@ extern "C" {
 }
 
 #include "gtest/gtest.h"
-#define NB_RULES 100
+#define NB_RULES 300
 #define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64
 
@@ -24,7 +24,7 @@ TEST(Hypecuts, RandomRules)
   hypercuts_classifier *classifier = new_hypercuts_classifier(rules, &nb_rules);
   hypercuts_print(classifier);
 
-    for (uint32_t i = 0; i < NB_RULES; ++i){
+    for (uint32_t i = 0; i < nb_rules; ++i){
         u_char *h = get_header(*rules[i]);
         uint32_t r = *(uint32_t *)hypercuts_search(classifier, h, HEADER_LENGTH);
         EXPECT_EQ(r, i);
@@ -89,8 +89,7 @@ classifier_rule **get_random_rules(uint32_t size, uint32_t dimension_limit)
       // Generate random values for the dimension
       uint32_t max = (uint32_t)(0x1 << result[i]->fields[j]->bit_length) - 1;
       uint32_t value = rand() % max;
-      uint32_t pre_mask = ((uint32_t)0x1 << (result[i]->fields[j]->bit_length / 2)) - 1;
-      uint32_t mask = (uint32_t) value & pre_mask;
+      uint32_t mask = ((uint32_t)0x1 << (result[i]->fields[j]->bit_length / 2)) - 1;
       uint32_t field_value = 0;
       if(value != 0)
           field_value = (uint32_t) value & ~mask;
