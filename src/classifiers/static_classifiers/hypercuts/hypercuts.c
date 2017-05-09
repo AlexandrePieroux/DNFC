@@ -18,8 +18,7 @@ void insert_field_collection(
 // Hypercuts heuristic that eliminate overlapping rules
 void rules_overlap(
     struct classifier_rule ***rules,
-    uint32_t *nb_rules,
-    struct classifier_rule ***out_rules);
+    uint32_t *nb_rules);
 
 // Add a new dimensions to the collection of dimensions
 void dimension_collection_add_field(
@@ -228,7 +227,6 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **r
     struct hypercuts_classifier *classifier = chkmalloc(sizeof(*classifier));
     struct hypercuts_node ***leaves = chkcalloc(1, sizeof(struct hypercuts_node ***));
     struct hypercuts_dimension **dimensions;
-    struct classifier_rule **out_rules;
     struct classifier_field **fields_set;
     uint32_t nb_dimensions = 0;
 
@@ -236,15 +234,15 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **r
     normalize_rules(rules, nb_rules, &dimensions, &nb_dimensions, &fields_set);
 
     // Second heuristic: eliminate overlapping rules (rules that will never be matched because of former bigger rules).
-    rules_overlap(&rules, &nb_rules, &out_rules);
+    rules_overlap(&rules, &nb_rules);
 
     // Third heuristic: we shrink the space covered by the node
-    shrink_space_node(dimensions, nb_dimensions, out_rules, nb_rules);
+    shrink_space_node(dimensions, nb_dimensions, rules, nb_rules);
 
     // Recursive node construction
     uint32_t *nb_leaves = chkmalloc(sizeof(*nb_leaves));
     *nb_leaves = 0;
-    classifier->root = build_node(out_rules, nb_rules, leaves, nb_leaves, dimensions, nb_dimensions);
+    classifier->root = build_node(rules, nb_rules, leaves, nb_leaves, dimensions, nb_dimensions);
     classifier->fields_set = fields_set;
     classifier->nb_dimensions = nb_dimensions;
     for(uint32_t i = 0; i < nb_dimensions; ++i)
@@ -343,8 +341,7 @@ void insert_field_collection(
 
 void rules_overlap(
     struct classifier_rule ***rules,
-    uint32_t *nb_rules,
-    struct classifier_rule ***out_rules)
+    uint32_t *nb_rules)
 {
     // For each rules
     uint32_t count = *nb_rules;
@@ -403,17 +400,23 @@ void rules_overlap(
     }
 
     // Setting the set of rules without overlaps
-    (*out_rules) = chkmalloc(sizeof(*out_rules) * count);
+    struct classifier_rule *out_rules[count];
     uint32_t index = 0;
     for (uint32_t i = 0; i < *nb_rules; ++i)
     {
         if ((*rules)[i])
         {
-            (*out_rules)[index] = (*rules)[i];
+            out_rules[index] = (*rules)[i];
             index++;
         }
     }
     *nb_rules = count;
+    (*rules) = chkrealloc(*rules, sizeof(*rules) * count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        (*rules)[i] = out_rules[i];
+    }
+    
     if (suppressed_rules_counter != 0)
         fprintf(stderr, "Warning: %d rules were deleted during the normalization process\n", suppressed_rules_counter);
 }
