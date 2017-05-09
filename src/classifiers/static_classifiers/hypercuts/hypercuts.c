@@ -217,7 +217,7 @@ void print_tree(
 
 /*             Hypercuts private functions         */
 
-struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **rules, uint32_t nb_rules)
+struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **rules, uint32_t *nb_rules)
 {
     if (!rules || (nb_rules == 0))
         return NULL;
@@ -231,18 +231,18 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **r
     uint32_t nb_dimensions = 0;
 
     // Normalize rules: getting the total of unique dimensions.
-    normalize_rules(rules, nb_rules, &dimensions, &nb_dimensions, &fields_set);
+    normalize_rules(rules, *nb_rules, &dimensions, &nb_dimensions, &fields_set);
 
     // Second heuristic: eliminate overlapping rules (rules that will never be matched because of former bigger rules).
-    rules_overlap(&rules, &nb_rules);
+    rules_overlap(&rules, nb_rules);
 
     // Third heuristic: we shrink the space covered by the node
-    shrink_space_node(dimensions, nb_dimensions, rules, nb_rules);
+    shrink_space_node(dimensions, nb_dimensions, rules, *nb_rules);
 
     // Recursive node construction
     uint32_t *nb_leaves = chkmalloc(sizeof(*nb_leaves));
     *nb_leaves = 0;
-    classifier->root = build_node(rules, nb_rules, leaves, nb_leaves, dimensions, nb_dimensions);
+    classifier->root = build_node(rules, *nb_rules, leaves, nb_leaves, dimensions, nb_dimensions);
     classifier->fields_set = fields_set;
     classifier->nb_dimensions = nb_dimensions;
     for(uint32_t i = 0; i < nb_dimensions; ++i)

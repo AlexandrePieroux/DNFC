@@ -56,7 +56,7 @@ struct hypercuts_dimension
    uint32_t max_dim;
 };
 
-struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **rules, uint32_t nb_rules);
+struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **rules, uint32_t *nb_rules);
 
 void *hypercuts_search(struct hypercuts_classifier *classifier, u_char *header, size_t header_length);
 

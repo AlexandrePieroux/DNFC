@@ -19,8 +19,9 @@ uint32_t rand_interval(uint32_t min, uint32_t max);
 
 TEST(Hypecuts, RandomRules)
 {
-  classifier_rule **rules = get_random_rules(NB_RULES, NB_DIMENSIONS);
-  hypercuts_classifier *classifier = new_hypercuts_classifier(rules, NB_RULES);
+  uint32_t nb_rules = NB_RULES;
+  classifier_rule **rules = get_random_rules(nb_rules, NB_DIMENSIONS);
+  hypercuts_classifier *classifier = new_hypercuts_classifier(rules, &nb_rules);
   hypercuts_print(classifier);
 
     for (uint32_t i = 0; i < NB_RULES; ++i){
