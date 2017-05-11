@@ -398,7 +398,6 @@ void rules_overlap(
                 (*rules)[j] = NULL;
                 suppressed_rules_counter++;
                 count--;
-                break;
             }
         }
     }
