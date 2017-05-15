@@ -7,7 +7,7 @@ extern "C" {
 }
 
 #include "gtest/gtest.h"
-#define NB_RULES 1000
+#define NB_RULES 25000
 #define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64
 
@@ -21,13 +21,16 @@ TEST(Hypecuts, RandomRules)
 {
   uint32_t nb_rules = NB_RULES;
   classifier_rule **rules = get_random_rules(nb_rules, NB_DIMENSIONS);
-  hypercuts_classifier *classifier = new_hypercuts_classifier(rules, &nb_rules);
-  hypercuts_print(classifier);
+  hypercuts_classifier *classifier = new_hypercuts_classifier(&rules, &nb_rules, false);
+  //hypercuts_print(classifier);
 
     for (uint32_t i = 0; i < nb_rules; ++i){
         u_char *h = get_header(*rules[i]);
-        uint32_t r = *(uint32_t *)hypercuts_search(classifier, h, HEADER_LENGTH);
-        EXPECT_EQ(r, rules[i]->id);
+        uint32_t result = NULL;
+        void* r = hypercuts_search(classifier, h, HEADER_LENGTH);
+        if(r)
+            result = *(uint32_t *)r;
+        EXPECT_EQ(result, rules[i]->id);
         free(h);
     }
 }

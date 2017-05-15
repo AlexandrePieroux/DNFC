@@ -8,7 +8,8 @@ void normalize_rules(
     uint32_t nb_rules,
     struct hypercuts_dimension ***dimensions,
     uint32_t *nb_dimensions,
-    struct classifier_field ***fields_set);
+    struct classifier_field ***fields_set,
+    bool verbose);
 
 void insert_field_collection(
     struct classifier_field ***collection,
@@ -19,7 +20,8 @@ void insert_field_collection(
 void rules_overlap(
     struct classifier_rule ***rules,
     uint32_t *nb_rules,
-    struct classifier_rule ***out_rules);
+    struct classifier_rule ***out_rules,
+    bool verbose);
 
 // Add a new dimensions to the collection of dimensions
 void dimension_collection_add_field(
@@ -51,6 +53,9 @@ struct hypercuts_dimension *new_dimension(
     uint32_t cuts,
     uint32_t min,
     uint32_t max);
+
+// Count the number of rule in a pointer array
+uint32_t count_nb_rule(struct classifier_rule **rule);
 
 // Check if a leaf that contain the same set of rules already exist in the array of leaves
 struct hypercuts_node *leaf_node_exist(
@@ -218,7 +223,7 @@ void print_tree(
 
 /*             Hypercuts private functions         */
 
-struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **rules, uint32_t *nb_rules)
+struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule ***rules, uint32_t *nb_rules, bool verbose)
 {
     if (!rules || (nb_rules == 0))
         return NULL;
@@ -234,10 +239,10 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule **r
     uint32_t nb_dimensions = 0;
 
     // Normalize rules: getting the total of unique dimensions.
-    normalize_rules(rules, *nb_rules, &dimensions, &nb_dimensions, &fields_set);
+    normalize_rules(*rules, *nb_rules, &dimensions, &nb_dimensions, &fields_set, verbose);
 
     // Second heuristic: eliminate overlapping rules (rules that will never be matched because of former bigger rules).
-    rules_overlap(&rules, nb_rules, &out_rules);
+    rules_overlap(rules, nb_rules, &out_rules, verbose);
 
     // Third heuristic: we shrink the space covered by the node
     shrink_space_node(dimensions, nb_dimensions, out_rules, *nb_rules);
@@ -284,7 +289,8 @@ void normalize_rules(
     uint32_t nb_rules,
     struct hypercuts_dimension ***dimensions,
     uint32_t *nb_dimensions,
-    struct classifier_field ***fields_set)
+    struct classifier_field ***fields_set,
+    bool verbose)
 {
     struct classifier_field **field_collection = chkcalloc(NB_MAX_UNIQUE_DIMENSIONS, sizeof(*field_collection));
     uint32_t inserted_element = 1;
@@ -295,14 +301,14 @@ void normalize_rules(
             // Check if rule is coherent
             uint32_t max = ((uint32_t)0x1 << rules[i]->fields[j]->bit_length) - 1;
             uint32_t field_max = rules[i]->fields[j]->value | rules[i]->fields[j]->mask;
-            if (max < field_max)
+            if (max < field_max && verbose)
             {
                 fprintf(stderr, "Field %d of rule %d is not coherent (bit length max: %d < field max value:%d)\n", j, i, max, field_max);
                 exit(-1);
             }
                 
             insert_field_collection(&field_collection, rules[i]->fields[j], &inserted_element);
-            if (inserted_element >= NB_MAX_UNIQUE_DIMENSIONS)
+            if (inserted_element >= NB_MAX_UNIQUE_DIMENSIONS && verbose)
             {
                 fprintf(stderr, "Limit of unique dimensions exceeded: %d (limit: %d)\n", inserted_element, NB_MAX_UNIQUE_DIMENSIONS);
                 exit(-1);
@@ -345,7 +351,8 @@ void insert_field_collection(
 void rules_overlap(
     struct classifier_rule ***rules,
     uint32_t *nb_rules,
-    struct classifier_rule ***out_rules)
+    struct classifier_rule ***out_rules,
+    bool verbose)
 {
     // For each rules
     uint32_t count = *nb_rules;
@@ -394,7 +401,8 @@ void rules_overlap(
             // If a rule completely overlap another, we suppress the second one as it will never be used
             if (overlap && common_fields)
             {
-                fprintf(stderr, "Warning: Rule %u shadow rule %u (Deleting rule %d from the set)\n", current_rule->id, tested_rule->id, tested_rule->id);
+                if (verbose)
+                    fprintf(stderr, "Warning: Rule %u shadow rule %u (Deleting rule %d from the set)\n", current_rule->id, tested_rule->id, tested_rule->id);
                 (*rules)[j] = NULL;
                 suppressed_rules_counter++;
                 count--;
@@ -416,14 +424,14 @@ void rules_overlap(
     
     // Modify original set (feedback to the callee)
     (*rules) = chkrealloc(*rules, sizeof(*rules) * count);
-    for (uint32_t i = 0; i < count; ++i)
+    for (uint32_t i = 0; i < index; ++i)
     {
         (*rules)[i] = (*out_rules)[i];
     }
     
     // Set the number of rules and warning if some rules were deleted
     *nb_rules = count;
-    if (suppressed_rules_counter != 0)
+    if (suppressed_rules_counter != 0 && verbose)
         fprintf(stderr, "Warning: %d rules were deleted during the normalization process\n", suppressed_rules_counter);
 }
 
@@ -660,6 +668,14 @@ struct hypercuts_dimension *new_dimension(
     return dimension;
 }
 
+uint32_t count_nb_rule(struct classifier_rule **rule)
+{
+    uint32_t i = 0;
+    while (rule[i])
+        i++;
+    return i;
+}
+
 struct hypercuts_node *leaf_node_exist(
     struct hypercuts_node ***leaves,
     uint32_t nb_leaves,
@@ -670,13 +686,21 @@ struct hypercuts_node *leaf_node_exist(
 
     struct hypercuts_node **item = *leaves;
     struct hypercuts_node *result = NULL;
-
+    uint32_t nb_rules = count_nb_rule(rules);
+    
     for (uint32_t i = 0; i < nb_leaves; ++i)
     {
         result = item[i];
         struct classifier_rule **leaves_rules = item[i]->rules;
+        uint32_t nb_leaves_rules = count_nb_rule(leaves_rules);
+        
+        if(nb_rules != nb_leaves_rules)
+        {
+            result = NULL;
+            continue;
+        }
+        
         uint32_t rule_index = 0;
-
         while (rules[rule_index] && leaves_rules[rule_index])
         {
             if (rules[rule_index] != leaves_rules[rule_index])
@@ -684,10 +708,9 @@ struct hypercuts_node *leaf_node_exist(
                 result = NULL;
                 break;
             }
-
             rule_index++;
         }
-
+        
         if (result == item[i])
             return result;
     }
