@@ -29,6 +29,7 @@
 
 /************** Utilities *****************/
 #include "../memory_management/memory_management.h"
+#include "../byte_stream/byte_stream.h"
 #include "../linked_list/linked_list.h"
 
 

@@ -7,6 +7,10 @@ set (MEMORY_MANAGEMENT
 		 libs/memory_management/memory_management.c
 		 libs/memory_management/memory_management.h)
 
+set (BYTE_STREAM
+         libs/byte_stream/byte_stream.c
+         libs/byte_stream/byte_stream.h)
+
 set (LINKED_LIST
 		 libs/linked_list/linked_list.c
 		 libs/linked_list/linked_list.h)
@@ -60,6 +64,7 @@ set (DNFC
 
 # add the Libraries
 add_library (memory_management ${MEMORY_MANAGEMENT})
+add_library (byte_stream ${BYTE_STREAM})
 add_library (linked_list ${LINKED_LIST})
 add_library (hash_table ${HASH_TABLE})
 add_library (thread_pool ${THREAD_POOL})
@@ -73,16 +78,22 @@ add_executable (DNFC ${DNFC})
 
 
 # link Libraries
-target_link_libraries (linked_list memory_management)
-target_link_libraries (hash_table linked_list)
-target_link_libraries (thread_pool memory_management)
-
+target_link_libraries (linked_list
+                        memory_management
+                        byte_stream)
+target_link_libraries (hash_table
+                        linked_list
+                        byte_stream)
+target_link_libraries (thread_pool
+                        memory_management)
 target_link_libraries (dynamic_classifiers 
 						hash_table 
-						memory_management)
+						memory_management
+                        byte_stream)
 target_link_libraries (static_classifiers 
 						hash_table 
-						memory_management)
+						memory_management
+                        byte_stream)
 target_link_libraries (DNFC
 						thread_pool
 						dynamic_classifiers
@@ -133,10 +144,10 @@ add_executable (hypercuts_test ${HYPERCUTS_TEST})
 add_executable (flow_table_test ${FLOW_TABLE})
 add_executable (DNFC_test ${DNFC_TEST})
 
-target_link_libraries (linked_list_test linked_list thread_pool gtest gtest_main)
-target_link_libraries (hash_table_test hash_table thread_pool gtest gtest_main)
-target_link_libraries (hypercuts_test static_classifiers thread_pool gtest gtest_main)
-target_link_libraries (flow_table_test dynamic_classifiers thread_pool gtest gtest_main)
+target_link_libraries (linked_list_test linked_list byte_stream thread_pool gtest gtest_main)
+target_link_libraries (hash_table_test hash_table byte_stream thread_pool gtest gtest_main)
+target_link_libraries (hypercuts_test static_classifiers byte_stream gtest gtest_main)
+target_link_libraries (flow_table_test dynamic_classifiers byte_stream thread_pool gtest gtest_main)
 target_link_libraries (DNFC_test
 								hash_table
 								thread_pool

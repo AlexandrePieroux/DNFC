@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include "../memory_management/memory_management.h"
+#include "../byte_stream/byte_stream.h"
 
 
 
