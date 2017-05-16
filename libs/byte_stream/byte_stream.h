@@ -6,7 +6,16 @@
 
 struct byte_stream
 {
-   u_char* stream;
-   uint32_t size;
+   uint8_t* stream;
+   size_t size;
 };
 
+struct byte_stream* new_byte_stream(void);
+
+void free_byte_stream(struct byte_stream* bt);
+
+void append_bytes(struct byte_stream* bt, void* data, size_t size);
+
+bool byte_stream_gt(struct byte_stream* bt1, struct byte_stream* bt2);
+
+bool byte_stream_eq(struct byte_stream* bt1, struct byte_stream* bt2);

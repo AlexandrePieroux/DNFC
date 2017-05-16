@@ -16,14 +16,15 @@ extern "C"
 
 struct arguments_t
 {
-  uint32_t *numbers;
+  key_type *numbers;
+  uint32_t index;
   uint32_t size;
   linked_list** table;
 };
 
 
 
-uint32_t* get_random_numbers(uint32_t size);
+key_type* get_random_numbers(uint32_t size);
 void* job_insert(void* args);
 void* job_get(void* args);
 void* job_remove(void* args);
@@ -90,9 +91,9 @@ int main(int argc, char **argv)
 
 
 
-uint32_t* get_random_numbers(uint32_t size)
+key_type* get_random_numbers(uint32_t size)
 {
-  uint32_t* result = new uint32_t[size];
+  key_type* result = new key_type[size];
   bool is_used[size];
   uint32_t im = 0;
   for (uint32_t in = 0; in < size && im < size; ++in) {
@@ -100,7 +101,8 @@ uint32_t* get_random_numbers(uint32_t size)
     if (is_used[r]) /* we already have 'r' */
       r = in; /* use 'in' instead of the generated number */
 
-    result[im++] = r; /* +1 since your range begins from 1 */
+    result[im] = new_byte_stream();
+    append_bytes(result[im++], &r, 4); /* +1 since your range begins from 1 */
     is_used[r] = 1;
   }
   return result;
@@ -113,7 +115,7 @@ void init(arguments_t** &args)
   // Init phase
   srand(time(NULL));
   linked_list_init();
-  uint32_t* numbers = get_random_numbers(NB_NUMBERS);
+  key_type* numbers = get_random_numbers(NB_NUMBERS);
 
   // Preparing the structure
   args = new arguments_t*[NB_THREADS];
@@ -128,6 +130,7 @@ void init(arguments_t** &args)
   {
     args[p] = new arguments_t;
     args[p]->numbers = &(numbers[p * divider]);
+    args[p]->index = p * divider; // TODO
     if(p != (NB_THREADS - 1))
       args[p]->size = divider;
     else
@@ -144,7 +147,7 @@ void* job_insert(void* args)
   linked_list* pool = NULL;
   for (uint32_t i = 0; i < args_cast->size; ++i)
   {
-    linked_list* item = new_linked_list(args_cast->numbers[i], args_cast->numbers[i], &args_cast->numbers[i], &pool);
+    linked_list* item = new_linked_list(args_cast->numbers[i], args_cast->index, &args_cast->numbers[i], &pool);
     EXPECT_EQ(linked_list_insert(args_cast->table, item, NULL), item);
   }
   return NULL;
@@ -159,7 +162,7 @@ void* job_get(void* args)
   linked_list* item;
   for (uint32_t i = 0; i < args_cast->size; ++i)
   {
-    item = linked_list_get(args_cast->table, args_cast->numbers[i], args_cast->numbers[i], &pool);
+    item = linked_list_get(args_cast->table, args_cast->numbers[i], args_cast->index, &pool);
     if(item)
     EXPECT_EQ(item->key, args_cast->numbers[i]);
   }
@@ -173,6 +176,6 @@ void* job_remove(void* args)
   arguments_t* args_cast = (arguments_t*)args;
   linked_list* pool = NULL;
   for(uint32_t i = 0; i < args_cast->size; ++i)
-  EXPECT_TRUE(linked_list_delete(args_cast->table, args_cast->numbers[i], args_cast->numbers[i], &pool));
+  EXPECT_TRUE(linked_list_delete(args_cast->table, args_cast->numbers[i], args_cast->index, &pool));
   return NULL;
 }
