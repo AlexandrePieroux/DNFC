@@ -97,11 +97,11 @@
 
 
 
-  bool hash_table_put(struct hash_table* table, uint32_t key, void* value)
+  bool hash_table_put(struct hash_table* table, key_type key, void* value)
   {
      uint32_t pre_hash = table->hash(key);
      uint32_t hash = compress(pre_hash, table->size);
-     struct linked_list* node = new_linked_list(pre_hash, so_regular(pre_hash), value, &table->pool);
+     struct linked_list* node = new_linked_list(key, so_regular(pre_hash), value, &table->pool);
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
@@ -120,14 +120,14 @@
 
 
 
-  void* hash_table_get(struct hash_table* table, uint32_t key)
+  void* hash_table_get(struct hash_table* table, key_type key)
   {
      uint32_t pre_hash = table->hash(key);
      uint32_t hash = compress(pre_hash, table->size);
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     struct linked_list* result = linked_list_get(&bucket, pre_hash, so_regular(pre_hash), &table->pool);
+     struct linked_list* result = linked_list_get(&bucket, key, so_regular(pre_hash), &table->pool);
      if(result)
       return result->data;
      else
@@ -136,7 +136,7 @@
 
 
 
-  bool hash_table_remove(struct hash_table* table, uint32_t key)
+  bool hash_table_remove(struct hash_table* table, key_type key)
   {
      uint32_t pre_hash = table->hash(key);
      uint32_t hash = compress(pre_hash, table->size);

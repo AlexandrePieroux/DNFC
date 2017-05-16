@@ -184,7 +184,7 @@ void hash_table_free(struct hash_table** table);
 *
 * NOTES :      NONE
 *******************************************************************/
-bool hash_table_put(struct hash_table* table, uint32_t key, void* value);
+bool hash_table_put(struct hash_table* table, key_type key, void* value);
 
 
 
@@ -215,7 +215,7 @@ bool hash_table_put(struct hash_table* table, uint32_t key, void* value);
 *
 * NOTES :      NONE
 *******************************************************************/
-void* hash_table_get(struct hash_table* table, uint32_t key);
+void* hash_table_get(struct hash_table* table, key_type key);
 
 
 
@@ -247,4 +247,4 @@ void* hash_table_get(struct hash_table* table, uint32_t key);
 *
 * NOTES :      NONE
 *******************************************************************/
-bool hash_table_remove(struct hash_table* table, uint32_t key);
+bool hash_table_remove(struct hash_table* table, key_type key);

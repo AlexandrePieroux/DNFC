@@ -139,7 +139,7 @@ bool linked_list_find(
 
          if(!get_bit(next))
          {
-            if(chash > hash || (ckey == key && chash == hash))
+            if(chash > hash || (byte_stream_eq(ckey, key) && chash == hash)) // TODO
                return (ckey == key);
             *prev_p = *cur_p;
          } else {

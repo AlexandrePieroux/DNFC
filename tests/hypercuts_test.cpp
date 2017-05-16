@@ -21,8 +21,8 @@ TEST(Hypecuts, RandomRules)
 {
   uint32_t nb_rules = NB_RULES;
   classifier_rule **rules = get_random_rules(nb_rules, NB_DIMENSIONS);
-  hypercuts_classifier *classifier = new_hypercuts_classifier(&rules, &nb_rules, false);
-  //hypercuts_print(classifier);
+  hypercuts_classifier *classifier = new_hypercuts_classifier(&rules, &nb_rules, true);
+  hypercuts_print(classifier);
 
     for (uint32_t i = 0; i < nb_rules; ++i){
         u_char *h = get_header(*rules[i]);

@@ -29,7 +29,7 @@
 
 
 
-typedef uint32_t key_type;
+typedef struct byte_stream* key_type;
 typedef uint32_t hash_type;
 typedef void* data_type;
 
