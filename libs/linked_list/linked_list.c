@@ -130,8 +130,8 @@ bool linked_list_find(
          if(!get_list_pointer(*cur_p))
             return NULL;
 
-         key_type ckey = (*cur_p)->key;
-         hash_type chash = (*cur_p)->hash;
+         key_type ckey = get_list_pointer(*cur_p)->key;
+         hash_type chash = get_list_pointer(*cur_p)->hash;
          struct linked_list* next = get_list_pointer(*cur_p)->next;
 
          if(atomic_load_list(&(*prev_p)->next) != get_list_pointer(*cur_p))
@@ -139,7 +139,7 @@ bool linked_list_find(
 
          if(!get_bit(next))
          {
-            if(chash > hash || (byte_stream_eq(ckey, key) && chash == hash)) // TODO
+            if(chash > hash || (byte_stream_eq(ckey, key) && chash == hash))
                return (ckey == key);
             *prev_p = *cur_p;
          } else {
