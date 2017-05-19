@@ -189,6 +189,7 @@ void linked_list_free(struct linked_list** list)
    while(cur_p)
    {
       next = get_list_pointer(cur_p->next);
+      free_byte_stream(cur_p->key);
       free(cur_p);
       cur_p = next;
    }

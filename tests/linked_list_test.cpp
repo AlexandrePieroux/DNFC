@@ -12,7 +12,7 @@ extern "C"
 #include "gtest/gtest.h"
 
 #define NB_NUMBERS      100000
-#define NB_THREADS      64
+#define NB_THREADS      5
 
 struct arguments_t
 {
@@ -43,9 +43,6 @@ TEST (LinkedListTest, Insert)
   free_threadpool(pool);
 
   linked_list_free(args[0]->table);
-  for (uint32_t i = 0; i < NB_NUMBERS; i++) {
-    free_byte_stream(args[0]->numbers[i]);
-  }
 }
 
 TEST (LinkedListTest, Get)
@@ -64,9 +61,6 @@ TEST (LinkedListTest, Get)
   free_threadpool(pool);
 
   linked_list_free(args[0]->table);
-  for (uint32_t i = 0; i < NB_NUMBERS; i++) {
-    free_byte_stream(args[0]->numbers[i]);
-  }
 }
 
 TEST (LinkedListTest, Remove)
@@ -85,9 +79,6 @@ TEST (LinkedListTest, Remove)
   free_threadpool(pool);
 
   linked_list_free(args[0]->table);
-  for (uint32_t i = 0; i < NB_NUMBERS; i++) {
-    free_byte_stream(args[0]->numbers[i]);
-  }
 }
 
 

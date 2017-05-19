@@ -203,11 +203,6 @@ void shrink_space_node(
     struct classifier_rule **rules_in_node,
     uint32_t nb_rules);
 
-// Transform a given interval into a hash value
-uint32_t hash_interval(
-    uint32_t value,
-    uint32_t mask);
-
 // Return true if the rule have a field for the dimensions 'id'
 bool get_field_id(struct classifier_rule *rule,
                   uint32_t id,
@@ -740,19 +735,12 @@ bool is_rule_unique(
     uint32_t mask,
     struct hash_table *table)
 {
-    if (hash_table_put(table, hash_interval(value, mask), NULL))
+    key_type k = new_byte_stream();
+    append_bytes(k, &value, 4);
+    append_bytes(k, &mask, 4);
+    if (hash_table_put(table, k, NULL))
         return true;
     return false;
-}
-
-uint32_t hash_interval(
-    uint32_t value,
-    uint32_t mask)
-{
-    uint32_t seed = 0;
-    seed = seed ^ (FNV1_hash(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2));
-    seed = seed ^ (FNV1_hash(mask) + 0x9e3779b9 + (seed << 6) + (seed >> 2));
-    return seed;
 }
 
 uint32_t get_dimensions(

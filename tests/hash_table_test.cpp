@@ -12,7 +12,7 @@ extern "C"
 #include "gtest/gtest.h"
 
 #define NB_NUMBERS      5000000
-#define NB_THREADS      64
+#define NB_THREADS      5
 
 struct arguments_t
 {

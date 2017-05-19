@@ -14,6 +14,9 @@ struct byte_stream* new_byte_stream()
 
 void free_byte_stream(struct byte_stream* bt)
 {
+    if(!bt)
+       return;
+   
     if(bt->stream)
     {
         free(bt->stream);
