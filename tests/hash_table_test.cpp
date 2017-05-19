@@ -16,14 +16,15 @@ extern "C"
 
 struct arguments_t
 {
-   uint32_t *numbers;
+   key_type* numbers;
+   uint32_t* index;
    uint32_t size;
    hash_table** table;
 };
 
 
 
-uint32_t* get_random_numbers(uint32_t size = 100);
+key_type* get_random_numbers(uint32_t size);
 void* job_insert(void* args);
 void* job_get(void* args);
 void* job_remove(void* args);
@@ -91,54 +92,60 @@ int main(int argc, char **argv)
 
 
 
-uint32_t* get_random_numbers(uint32_t size)
+key_type* get_random_numbers(uint32_t size)
 {
-  uint32_t* result = new uint32_t[size];
-  bool is_used[size];
-  for (size_t i = 0; i < size; i++) {
-    is_used[i] = false;
-  }
-  uint32_t im = 0;
-  for (uint32_t in = 0; in < size && im < size; ++in) {
-    uint32_t r = rand() % (in + 1); /* generate a random number 'r' */
-    if (is_used[r]) /* we already have 'r' */
-      r = in; /* use 'in' instead of the generated number */
-
-    result[im++] = r; /* +1 since your range begins from 1 */
-    is_used[r] = true;
-  }
-
-  return result;
+   key_type* result = new key_type[size];
+   bool is_used[size];
+   uint32_t im = 0;
+   for (uint32_t in = 0; in < size && im < size; ++in) {
+      uint32_t r = rand() % (in + 1); /* generate a random number 'r' */
+      if (is_used[r]) /* we already have 'r' */
+         r = in; /* use 'in' instead of the generated number */
+      
+      result[im] = new_byte_stream();
+      append_bytes(result[im], &r, 4); /* +1 since your range begins from 1 */
+      is_used[r] = 1;
+      im++;
+   }
+   return result;
 }
+
 
 
 
 void init(arguments_t** &args)
 {
-  // Init phase
-  srand(time(NULL));
-  hash_table_init();
-  uint32_t* numbers = get_random_numbers(NB_NUMBERS);
-
-  // Preparing the re
-  args = new arguments_t*[NB_THREADS];
-  hash_table** table = new hash_table*;
-  *table = new_hash_table(FNV_1);
-
-  // We distribute the work per threads
-  uint32_t divider = NB_NUMBERS / NB_THREADS;
-  uint32_t remain = NB_NUMBERS % NB_THREADS;
-  for (uint32_t p = 0; p < NB_THREADS; ++p)
-  {
-     args[p] = new arguments_t;
-     args[p]->numbers = &(numbers[p * divider]);
-     if(p != (NB_THREADS - 1))
-        args[p]->size = divider;
-     else
-        args[p]->size = divider + remain;
-     args[p]->table = table;
-  }
+   // Init phase
+   srand(time(NULL));
+   hash_table_init();
+   key_type* numbers = get_random_numbers(NB_NUMBERS);
+   
+   // Preparing the structure
+   args = new arguments_t*[NB_THREADS];
+   hash_table** table = new hash_table*;
+   *table = new_hash_table(FNV_1);
+   
+   // We distribute the work per threads
+   uint32_t divider = NB_NUMBERS / NB_THREADS;
+   uint32_t remain = NB_NUMBERS % NB_THREADS;
+   uint32_t* indexes = new uint32_t[NB_NUMBERS];
+   for (uint32_t i = 0; i < NB_NUMBERS; i++)
+      indexes[i] = i;
+   
+   for (uint32_t p = 0; p < NB_THREADS; ++p)
+   {
+      args[p] = new arguments_t;
+      args[p]->numbers = &(numbers[p * divider]);
+      args[p]->index = &(indexes[p * divider]);
+      
+      if(p != (NB_THREADS - 1))
+         args[p]->size = divider;
+      else
+         args[p]->size = divider + remain;
+      args[p]->table = table;
+   }
 }
+
 
 
 

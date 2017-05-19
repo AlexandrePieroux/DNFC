@@ -123,18 +123,18 @@ bool linked_list_find(
    for(;;)
    {
       *prev_p = *list;
-      *cur_p = (*prev_p)->next;
+      *cur_p = get_list_pointer((*prev_p)->next);
 
       for(;;)
       {
-         if(!get_list_pointer(*cur_p))
+         if(!(*cur_p))
             return NULL;
 
-         key_type ckey = get_list_pointer(*cur_p)->key;
-         hash_type chash = get_list_pointer(*cur_p)->hash;
-         struct linked_list* next = get_list_pointer(*cur_p)->next;
+         key_type ckey = (*cur_p)->key;
+         hash_type chash = (*cur_p)->hash;
+         struct linked_list* next = (*cur_p)->next;
 
-         if(atomic_load_list(&(*prev_p)->next) != get_list_pointer(*cur_p))
+         if(atomic_load_list(&(*prev_p)->next) != *cur_p)
             break;
 
          if(!get_bit(next))
@@ -143,7 +143,7 @@ bool linked_list_find(
                return (ckey == key);
             *prev_p = *cur_p;
          } else {
-            if(atomic_compare_and_swap(&(*prev_p)->next, get_list_pointer(*cur_p), get_list_pointer(next)))
+            if(atomic_compare_and_swap(&(*prev_p)->next, (*cur_p), get_list_pointer(next)))
                delete_node(get_list_pointer(*cur_p), pool);
             else
                break;

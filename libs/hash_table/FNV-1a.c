@@ -1,8 +1,7 @@
-#include "FNV-1.h"
+#include "FNV-1a.h"
 
 
-
-uint32_t FNV1_hash(uint32_t value)
+uint32_t FNV1a_hash(key_type value)
 {
    uint32_t hash = FNV_offset;
    uint32_t octet_of_data = value;

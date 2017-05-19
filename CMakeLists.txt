@@ -8,16 +8,16 @@ set (MEMORY_MANAGEMENT
 		 libs/memory_management/memory_management.h)
 
 set (BYTE_STREAM
-         libs/byte_stream/byte_stream.c
-         libs/byte_stream/byte_stream.h)
+       libs/byte_stream/byte_stream.c
+       libs/byte_stream/byte_stream.h)
 
 set (LINKED_LIST
 		 libs/linked_list/linked_list.c
 		 libs/linked_list/linked_list.h)
 
 set (HASH_TABLE
-		 libs/hash_table/FNV-1.c
-		 libs/hash_table/FNV-1.h
+		 libs/hash_table/FNV-1a.c
+		 libs/hash_table/FNV-1a.h
 		 libs/hash_table/murmur3.c
 		 libs/hash_table/murmur3.h
 		 libs/hash_table/hash_table.c
@@ -79,25 +79,26 @@ add_executable (DNFC ${DNFC})
 
 # link Libraries
 target_link_libraries (linked_list
-                        memory_management
-                        byte_stream)
+                       memory_management
+                       byte_stream)
 target_link_libraries (hash_table
-                        linked_list
-                        byte_stream)
+                       linked_list
+                       memory_management
+                       byte_stream)
 target_link_libraries (thread_pool
-                        memory_management)
+                       memory_management)
 target_link_libraries (dynamic_classifiers 
-						hash_table 
-						memory_management
-                        byte_stream)
+						     hash_table
+						     memory_management
+                       byte_stream)
 target_link_libraries (static_classifiers 
-						hash_table 
-						memory_management
-                        byte_stream)
+                       hash_table
+						     memory_management
+                       byte_stream)
 target_link_libraries (DNFC
-						thread_pool
-						dynamic_classifiers
-						static_classifiers)
+                       thread_pool
+                       dynamic_classifiers
+                       static_classifiers)
 
 # Tests
 # Download and unpack googletest at configure time

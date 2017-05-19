@@ -1,3 +1,6 @@
+#ifndef _DNFCH_
+#define _DNFCH_
+
 /*H**********************************************************************
 * FILENAME :        ABS_DNFC.h
 *
@@ -145,3 +148,5 @@ int DNFC_init(struct DNFC_conf *output, char *iface, int port);
 * NOTES :      None
 *******************************************************************/
 int DNFC_close(struct DNFC_conf *conf);
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef _LINKED_LISTH_
+#define _LINKED_LISTH_
+
 /*H**********************************************************************
 * FILENAME :        linked_list.h
 *
@@ -278,3 +281,5 @@ void linked_list_free(struct linked_list** list);
 * NOTES :      NONE
 *******************************************************************/
 struct linked_list* get_cur(void);
+
+#endif

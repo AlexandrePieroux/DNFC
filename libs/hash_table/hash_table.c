@@ -2,7 +2,7 @@
 
 
 
-  typedef uint32_t (*func_t)(uint32_t);
+  typedef uint32_t (*func_t)(key_type);
 
 
   /*                    Private macro                       */
@@ -143,7 +143,7 @@
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     if(!linked_list_delete(&bucket, pre_hash, so_regular(pre_hash), &table->pool))
+     if(!linked_list_delete(&bucket, key, so_regular(pre_hash), &table->pool))
         return false;
      fetch_and_dec(&table->nb_elements);
      return true;
@@ -185,23 +185,14 @@
 
 
 
-  uint32_t mod_size_hash(uint32_t v)
-  {
-     return v;
-  }
-
-
-
   func_t get_hash_func(uint32_t type)
   {
      switch(type)
      {
-        case FNV_1:
-           return FNV1_hash;
         case MURMUR:
            return murmur_hash;
         default:
-           return mod_size_hash;
+           return FNV1a_hash;
      }
   }
 
@@ -267,7 +258,10 @@
      struct linked_list* bucket = get_bucket(parent, table);
      if(!bucket)
         bucket = init_bucket(parent, table);
-     struct linked_list* dummy = new_linked_list(so_dummy(hash), so_dummy(hash), NULL, &table->pool);
+     uint32_t so_hash = so_dummy(hash);
+     key_type hash_dummy = new_byte_stream();
+     append_bytes(hash_dummy, &so_hash, 4);
+     struct linked_list* dummy = new_linked_list(hash_dummy, so_hash, NULL, &table->pool);
      struct linked_list* result = linked_list_insert(&bucket, dummy, &table->pool);
      if (result != dummy)
      {

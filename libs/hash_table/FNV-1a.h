@@ -1,3 +1,6 @@
+#ifndef _FNV_1AH_
+#define _FNV_1AH_
+
 #define _XOPEN_SOURCE
 
 #include <stdint.h>
@@ -6,7 +9,9 @@
 #include <math.h>
 #include <limits.h>
 #include <stdbool.h>
+#include "../byte_stream/byte_stream.h"
 
+typedef struct byte_stream* key_type;
 #define FNV_prime            16777619
 #define FNV_offset         2166136261
 
@@ -33,4 +38,6 @@
 *
 * NOTES :      
 *******************************************************************/
-uint32_t FNV1_hash(uint32_t value);
+uint32_t FNV1a_hash(key_type value);
+
+#endif

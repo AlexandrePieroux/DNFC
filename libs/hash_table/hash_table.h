@@ -1,3 +1,5 @@
+#ifndef _HASH_TABLEH_
+#define _HASH_TABLEH_
 /*H**********************************************************************
 * FILENAME :        hash_table.h
 *
@@ -18,6 +20,7 @@
 *
 * AUTHOR :    Pieroux Alexandre
 *H*/
+
 #define _XOPEN_SOURCE
 
 #include <stdint.h>
@@ -33,11 +36,12 @@
 #include "../linked_list/linked_list.h"
 
 
-/************** Hash functions available ***************/
-#include "FNV-1.h"
+/************** Available hash functions ***************/
+#include "FNV-1a.h"
 #include "murmur3.h"
 
-#define FNV_1          1
+
+#define FNV_1       1
 #define MURMUR      2
 
 
@@ -61,7 +65,7 @@ struct hash_table
    struct linked_list* pool;
    uint32_t size;
    uint32_t nb_elements;
-   uint32_t (*hash)(uint32_t);
+   uint32_t (*hash)(key_type);
 };
 
 
@@ -249,3 +253,5 @@ void* hash_table_get(struct hash_table* table, key_type key);
 * NOTES :      NONE
 *******************************************************************/
 bool hash_table_remove(struct hash_table* table, key_type key);
+
+#endif

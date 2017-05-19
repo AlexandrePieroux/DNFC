@@ -1,3 +1,6 @@
+#ifndef _MURMUR3H_
+#define _MURMUR3H_
+
 #define _XOPEN_SOURCE
 
 #include <stdint.h>
@@ -6,7 +9,9 @@
 #include <math.h>
 #include <limits.h>
 #include <stdbool.h>
+#include "../byte_stream/byte_stream.h"
 
+typedef struct byte_stream* key_type;
 #define MURMUR_seed  2166136261
 
 
@@ -32,4 +37,6 @@
 *
 * NOTES :  
 *******************************************************************/
-uint32_t murmur_hash(uint32_t value);
+uint32_t murmur_hash(key_type value);
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef _MEMORY_MANAGEMENTH_
+#define _MEMORY_MANAGEMENTH_
+
 /*H**********************************************************************
 * FILENAME :        memory_management.h
 *
@@ -101,3 +104,5 @@ void* chkcalloc(size_t nitems, size_t size);
 * NOTES :      NONE
 *******************************************************************/
 void* chkrealloc(void* ptr, size_t size);
+
+#endif
