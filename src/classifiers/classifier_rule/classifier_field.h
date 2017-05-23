@@ -1,3 +1,5 @@
+#ifndef _CLASSIFIER_FIELDH_
+#define _CLASSIFIER_FIELDH_
 /*H**********************************************************************
 * FILENAME :        classifier_field.h
 *
@@ -27,3 +29,5 @@ struct classifier_field
    uint32_t mask;
    uint32_t value;
 };
+
+#endif

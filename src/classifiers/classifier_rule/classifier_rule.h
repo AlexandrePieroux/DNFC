@@ -1,3 +1,6 @@
+#ifndef _CLASSIFIER_RULEDH_
+#define _CLASSIFIER_RULEDH_
+
 /*H**********************************************************************
 * FILENAME :        classifier_rule.h
 *
@@ -22,3 +25,5 @@ struct classifier_rule
    uint32_t nb_fields;
    void *action;
 };
+
+#endif

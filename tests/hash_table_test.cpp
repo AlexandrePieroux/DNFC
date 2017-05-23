@@ -96,6 +96,10 @@ key_type* get_random_numbers(uint32_t size)
 {
    key_type* result = new key_type[size];
    bool is_used[size];
+   for (uint32_t i = 0; i < size; i++)
+   {
+      is_used[i] = false;
+   }
    uint32_t im = 0;
    for (uint32_t in = 0; in < size && im < size; ++in) {
       uint32_t r = rand() % (in + 1); /* generate a random number 'r' */
