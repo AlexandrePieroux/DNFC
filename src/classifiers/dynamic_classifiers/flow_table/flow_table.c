@@ -1,6 +1,6 @@
 #include "flow_table.h"
 
-# define HEADER_LENGTH  104
+# define HEADER_LENGTH  320
 
 uint32_t get_uint32_value(u_char *header,
                           uint32_t offset,
@@ -21,7 +21,7 @@ void* get_flow(struct hash_table* table,
    // Get the information of the flow
    key_type key = get_key(header);
    void* result = hash_table_get(table, key);
-   //free_byte_stream(key);
+   free_byte_stream(key);
    return result;
 }
 

@@ -33,9 +33,9 @@ void append_bytes(struct byte_stream* bt, void* data, size_t size)
     uint8_t* c = (uint8_t*)data;
     bt->stream = chkrealloc(bt->stream, bt->size + size);
     uint32_t j = 0;
-    for(uint32_t i = bt->size; i < (bt->size + size); ++i)
+    for(uint32_t i = bt->size + size; i > bt->size; i--)
     {
-        bt->stream[i] = c[j];
+        bt->stream[i - 1] = c[j];
         j++;
     }
     bt->size += size;

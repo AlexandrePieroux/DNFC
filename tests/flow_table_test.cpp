@@ -11,9 +11,10 @@ extern "C"
 
 #include "gtest/gtest.h"
 
-#define NB_NUMBERS      1000000
-#define NB_THREADS      64
+#define NB_NUMBERS      1000
+#define NB_THREADS      1
 #define HEADER_LENGTH   16
+#define HEADER_BIT_L    320
 
 struct arguments_t
 {
@@ -25,7 +26,7 @@ struct arguments_t
 
 
 
-uint32_t* get_random_numbers(uint32_t size);
+uint32_t *get_random_numbers(uint32_t min, uint32_t max);
 void* job_insert(void* args);
 void* job_get(void* args);
 void* job_remove(void* args);
@@ -53,9 +54,8 @@ TEST (FlowTable, Get)
    threadpool_t* pool = new_threadpool(NB_THREADS);
    init(&args);
    
-   for (uint32_t i = 0; i < NB_THREADS; ++i)
-      threadpool_add_work(pool, job_insert, args[i]);
-   threadpool_wait(pool);
+   for (uint32_t i = 0; i < NB_NUMBERS; ++i)
+      put_flow(*(*args)->table, &(*args)->numbers[i], HEADER_BIT_L, &(*args)->numbers[i]);
    
    for (uint32_t i = 0; i < NB_THREADS; ++i)
       threadpool_add_work(pool, job_get, args[i]);
@@ -71,9 +71,8 @@ TEST (FlowTable, Remove)
    threadpool_t* pool = new_threadpool(NB_THREADS);
    init(&args);
    
-   for (uint32_t i = 0; i < NB_THREADS; ++i)
-      threadpool_add_work(pool, job_insert, args[i]);
-   threadpool_wait(pool);
+   for (uint32_t i = 0; i < NB_NUMBERS; ++i)
+      put_flow(*(*args)->table, &(*args)->numbers[i], HEADER_BIT_L, &(*args)->numbers[i]);
    
    for (uint32_t i = 0; i < NB_THREADS; ++i)
       threadpool_add_work(pool, job_remove, args[i]);
@@ -94,25 +93,23 @@ int main(int argc, char **argv)
 
 
 
-uint32_t *get_random_numbers(uint32_t size)
+uint32_t *get_random_numbers(uint32_t min, uint32_t max)
 {
-   /**
-    Could be generalised to random over bigger range than 0 - 'size'
-    **/
+   uint32_t size = max - min;
    uint32_t *result = new uint32_t[size];
-   bool is_used[size];
+   bool is_used[max];
    for (uint32_t i = 0; i < size; i++)
    {
       is_used[i] = false;
    }
    uint32_t im = 0;
-   for (uint32_t in = 0; in < size && im < size; ++in)
+   for (uint32_t in = min; in < max && im < size; ++in)
    {
       uint32_t r = rand() % (in + 1); /* generate a random number 'r' */
       if (is_used[r])                 /* we already have 'r' */
-         r = in;                       /* use 'in' instead of the generated number */
+         r = in;                      /* use 'in' instead of the generated number */
       
-      result[im++] = r; /* +1 since your range begins from 1 */
+      result[im++] = r + min;
       is_used[r] = true;
    }
    return result;
@@ -124,15 +121,54 @@ void init(arguments_t*** args)
 {
    // Init phase
    hash_table_init();
-   uint32_t* numbers = get_random_numbers(NB_NUMBERS * 4);
+   
+   // Get random unique flows
+   uint32_t* protocols = get_random_numbers(0, 255);
+   uint32_t* source_address = get_random_numbers(0, NB_NUMBERS);
+   uint32_t* destination_address = get_random_numbers((NB_NUMBERS + 1), (NB_NUMBERS * 2) + 1);
+   uint32_t* source_port = get_random_numbers(0, 65535);
+   uint32_t* destination_port = get_random_numbers(0, 65535);
+   
    u_char** keys = new u_char*[NB_NUMBERS];
    uint32_t j = 0;
+   uint32_t* nb = new uint32_t;
+   uint8_t zero = 0;
    for(uint32_t i = 0; i < NB_NUMBERS * 4; i+=4){
       key_type tmp = new_byte_stream();
-      append_bytes(tmp, &(numbers[i]), 4);
-      append_bytes(tmp, &(numbers[i+1]), 4);
-      append_bytes(tmp, &(numbers[i+2]), 4);
-      append_bytes(tmp, &(numbers[i+3]), 4);
+      
+      // Put the offset of port (9 bytes)
+      for(uint32_t j = 0; j < 9; j++)
+         append_bytes(tmp, &zero, 1);
+      
+      // Put the port
+      *nb = protocols[(i % 256)];
+      append_bytes(tmp, nb, 1);
+      
+      // Put the offset of the addresses (2 bytes)
+      for(uint32_t j = 0; j < 2; j++)
+         append_bytes(tmp, &zero, 1);
+      
+      // Put the source address
+      *nb = source_address[i];
+      append_bytes(tmp, nb, 4);
+      
+      // Put the destination address
+      *nb = destination_address[i];
+      append_bytes(tmp, nb, 4);
+      
+      // Put the offset of the source ports (16 bytes)
+      for(uint32_t j = 0; j < 16; j++)
+         append_bytes(tmp, &zero, 1);
+      
+      // Put the source port
+      *nb = source_port[(i % 65536)];
+      append_bytes(tmp, nb, 2);
+      
+      // Put the destination port
+      *nb = destination_port[(i % 65536)];
+      append_bytes(tmp, nb, 2);
+      
+      // Get the uint8_t array that form the header
       keys[j++] = tmp->stream;
    }
    
@@ -167,8 +203,10 @@ void init(arguments_t*** args)
 void* job_insert(void* args)
 {
    arguments_t* args_cast = (arguments_t*)args;
-   for (uint32_t i = 0; i < args_cast->size; ++i)
-      EXPECT_TRUE(put_flow(*args_cast->table, &args_cast->numbers[i], 128, &args_cast->numbers[i]));
+   for (uint32_t i = 0; i < args_cast->size; ++i){
+      bool result = put_flow(*args_cast->table, &args_cast->numbers[i], HEADER_BIT_L, &args_cast->numbers[i]);
+      EXPECT_TRUE(result);
+   }
    return NULL;
 }
 
@@ -178,7 +216,8 @@ void* job_get(void* args)
 {
    arguments_t* args_cast = (arguments_t*)args;
    for (uint32_t i = 0; i < args_cast->size; ++i){
-      EXPECT_EQ(get_flow(*args_cast->table, &args_cast->numbers[i], 128), &args_cast->numbers[i]);
+      if (args_cast->numbers[i])
+         EXPECT_EQ(get_flow(*args_cast->table, &args_cast->numbers[i], HEADER_BIT_L), &args_cast->numbers[i]);
    }
    return NULL;
 }
@@ -189,7 +228,7 @@ void* job_remove(void* args)
 {
    arguments_t* args_cast = (arguments_t*)args;
    for(uint32_t i = 0; i < args_cast->size; ++i){
-      bool result = remove_flow(*args_cast->table, &args_cast->numbers[i], 128);
+      bool result = remove_flow(*args_cast->table, &args_cast->numbers[i], HEADER_BIT_L);
       EXPECT_TRUE(result);
    }
    return NULL;

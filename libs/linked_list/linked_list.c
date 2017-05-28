@@ -139,8 +139,9 @@ bool linked_list_find(
 
          if(!get_bit(next))
          {
-            if(chash > hash || (byte_stream_eq(ckey, key) && chash == hash))
-               return (ckey == key);
+            bool eq = byte_stream_eq(ckey, key);
+            if(chash > hash || (eq && chash == hash))
+               return eq;
             *prev_p = *cur_p;
          } else {
             if(atomic_compare_and_swap(&(*prev_p)->next, (*cur_p), get_list_pointer(next)))
