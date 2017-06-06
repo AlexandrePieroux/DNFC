@@ -11,14 +11,14 @@ extern "C"
 
 #include "gtest/gtest.h"
 
-#define NB_NUMBERS      1000
-#define NB_THREADS      1
+#define NB_NUMBERS      1000000
+#define NB_THREADS      64
 #define HEADER_LENGTH   16
 #define HEADER_BIT_L    320
 
 struct arguments_t
 {
-   u_char* numbers;
+   u_char** numbers;
    uint32_t* index;
    uint32_t size;
    hash_table** table;
@@ -55,7 +55,7 @@ TEST (FlowTable, Get)
    init(&args);
    
    for (uint32_t i = 0; i < NB_NUMBERS; ++i)
-      put_flow(*(*args)->table, &(*args)->numbers[i], HEADER_BIT_L, &(*args)->numbers[i]);
+      put_flow(*(*args)->table, (*args)->numbers[i], HEADER_BIT_L, &(*args)->numbers[i]);
    
    for (uint32_t i = 0; i < NB_THREADS; ++i)
       threadpool_add_work(pool, job_get, args[i]);
@@ -72,7 +72,7 @@ TEST (FlowTable, Remove)
    init(&args);
    
    for (uint32_t i = 0; i < NB_NUMBERS; ++i)
-      put_flow(*(*args)->table, &(*args)->numbers[i], HEADER_BIT_L, &(*args)->numbers[i]);
+      put_flow(*(*args)->table, (*args)->numbers[i], HEADER_BIT_L, &(*args)->numbers[i]);
    
    for (uint32_t i = 0; i < NB_THREADS; ++i)
       threadpool_add_work(pool, job_remove, args[i]);
@@ -125,7 +125,7 @@ void init(arguments_t*** args)
    // Get random unique flows
    uint32_t* protocols = get_random_numbers(0, 255);
    uint32_t* source_address = get_random_numbers(0, NB_NUMBERS);
-   uint32_t* destination_address = get_random_numbers((NB_NUMBERS + 1), (NB_NUMBERS * 2) + 1);
+   uint32_t* destination_address = get_random_numbers(NB_NUMBERS, (NB_NUMBERS * 2));
    uint32_t* source_port = get_random_numbers(0, 65535);
    uint32_t* destination_port = get_random_numbers(0, 65535);
    
@@ -133,7 +133,7 @@ void init(arguments_t*** args)
    uint32_t j = 0;
    uint32_t* nb = new uint32_t;
    uint8_t zero = 0;
-   for(uint32_t i = 0; i < NB_NUMBERS * 4; i+=4){
+   for(uint32_t i = 0; i < NB_NUMBERS; i++){
       key_type tmp = new_byte_stream();
       
       // Put the offset of port (9 bytes)
@@ -187,7 +187,7 @@ void init(arguments_t*** args)
    for (uint32_t p = 0; p < NB_THREADS; ++p)
    {
       (*args)[p] = new arguments_t;
-      (*args)[p]->numbers = keys[p * divider];
+      (*args)[p]->numbers = &keys[p * divider];
       (*args)[p]->index = &(indexes[p * divider]);
       
       if(p != (NB_THREADS - 1))
@@ -204,7 +204,7 @@ void* job_insert(void* args)
 {
    arguments_t* args_cast = (arguments_t*)args;
    for (uint32_t i = 0; i < args_cast->size; ++i){
-      bool result = put_flow(*args_cast->table, &args_cast->numbers[i], HEADER_BIT_L, &args_cast->numbers[i]);
+      bool result = put_flow(*args_cast->table, args_cast->numbers[i], HEADER_BIT_L, &args_cast->numbers[i]);
       EXPECT_TRUE(result);
    }
    return NULL;
@@ -217,7 +217,7 @@ void* job_get(void* args)
    arguments_t* args_cast = (arguments_t*)args;
    for (uint32_t i = 0; i < args_cast->size; ++i){
       if (args_cast->numbers[i])
-         EXPECT_EQ(get_flow(*args_cast->table, &args_cast->numbers[i], HEADER_BIT_L), &args_cast->numbers[i]);
+         EXPECT_EQ(get_flow(*args_cast->table, args_cast->numbers[i], HEADER_BIT_L), &args_cast->numbers[i]);
    }
    return NULL;
 }
@@ -228,7 +228,7 @@ void* job_remove(void* args)
 {
    arguments_t* args_cast = (arguments_t*)args;
    for(uint32_t i = 0; i < args_cast->size; ++i){
-      bool result = remove_flow(*args_cast->table, &args_cast->numbers[i], HEADER_BIT_L);
+      bool result = remove_flow(*args_cast->table, args_cast->numbers[i], HEADER_BIT_L);
       EXPECT_TRUE(result);
    }
    return NULL;
