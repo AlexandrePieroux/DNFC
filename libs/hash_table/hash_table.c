@@ -7,6 +7,9 @@
 
   /*                    Private macro                       */
 
+  // Atomic load list
+  #define atomic_load_list(p) ({struct linked_list* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
+
   // Atomic compare and swap
   #define atomic_compare_and_swap(t,old,new) __sync_bool_compare_and_swap (t, old, new)
 
@@ -129,7 +132,7 @@
         bucket = init_bucket(hash, table);
      struct linked_list* result = linked_list_get(&bucket, key, so_regular(pre_hash), &table->pool);
      if(result)
-      return result->data;
+      return atomic_load_list(&result->data);
      else
       return NULL;
   }

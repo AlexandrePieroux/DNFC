@@ -132,7 +132,7 @@ bool linked_list_find(
 
          key_type ckey = (*cur_p)->key;
          hash_type chash = (*cur_p)->hash;
-         struct linked_list* next = (*cur_p)->next;
+         struct linked_list* next = atomic_load_list(&(*cur_p)->next);
 
          if(atomic_load_list(&(*prev_p)->next) != *cur_p)
             break;
@@ -169,7 +169,7 @@ bool linked_list_delete(struct linked_list** list,
       if(!linked_list_find(list, key, hash, pool))
          return false;
 
-      struct linked_list* next = (*cur_p)->next;
+      struct linked_list* next = atomic_load_list(&(*cur_p)->next);
       if(!atomic_compare_and_swap(&(*cur_p)->next, next, mark_pointer(next, 1)))
          continue;
       if(atomic_compare_and_swap(&(*prev_p)->next, get_list_pointer(*cur_p), get_list_pointer(next)))
@@ -181,7 +181,7 @@ bool linked_list_delete(struct linked_list** list,
 }
 
 
-
+// Not usable in concurent environement
 void linked_list_free(struct linked_list** list)
 {
    struct linked_list* cur_p = *list;
@@ -240,7 +240,7 @@ void delete_node(struct linked_list* node, struct linked_list** pool)
 
    for(;;)
    {
-      struct linked_list* head = *pool;
+      struct linked_list* head = atomic_load_list(&(*pool));
       node->next = head;
       if(atomic_compare_and_swap(&(*pool), head, node))
          break;
