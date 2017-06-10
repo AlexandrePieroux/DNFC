@@ -144,7 +144,7 @@ set (LINKED_LIST_TEST tests/linked_list_test.cpp)
 set (HASH_TABLE_TEST tests/hash_table_test.cpp)
 set (HYPERCUTS_TEST tests/hypercuts_test.cpp)
 set (FLOW_TABLE_TEST tests/flow_table_test.cpp)
-set (QUEUE_TEST test/queue_test.cpp)
+set (QUEUE_TEST tests/queue_test.cpp)
 set (DNFC_TEST tests/DNFC_test.cpp)
 
 add_executable (linked_list_test ${LINKED_LIST_TEST})

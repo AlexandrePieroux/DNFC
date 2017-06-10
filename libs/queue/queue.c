@@ -54,25 +54,45 @@ bool queue_push(struct queue* queue, void* data)
       return false;
    else
       fetch_and_inc(&queue->size)
+      
+   // Get hazardous pointer
+   struct queue_item** cur = get_var(cur);
    
-   // Naive lock-free queue push
+   // Prepare new data
    struct queue_item* node = new_queue_item(data);
+   
+   // Till we succeed
    for(;;)
    {
-      struct queue_item* tail = queue->tail;
-      struct queue_item* next = tail->next;
-      if(tail == queue->tail)
+      // Load tail and make the hazard point to it
+      struct queue_item* tail = atomic_load_item(queue->tail);
+      *cur = tail;
+      
+      // Check that the tail does not have changed
+      if(tail != atomic_load_item(queue->tail))
+         continue;
+      
+      // Read the next node of tail (should be null)
+      struct queue_item* next = atomic_load_item(tail->next);
+      
+      // Check that the tail does not have changed
+      if(tail != atomic_load_item(queue->tail))
+         continue;
+      
+      // If next is not null we advance the pointer of the tail to the next node
+      if(next)
       {
-         if(!next)
-         {
-            if(atomic_compare_and_swap(&tail->next, next, node);
-               break;
-         } else {
-            atomic_compare_and_swap(&queue->tail, tail, next);
-         }
+         atomic_compare_and_swap(&queue->tail, tail, next);
+         continue;
       }
+      
+      // Try to effectively push the new node
+      if(atomic_compare_and_swap(&tail->next, NULL, node))
+         break;
    }
+   // Set the tail to the new node
    atomic_compare_and_swap(&queue->tail, tail, node);
+   *cur = NULL;
    return true;
 }
 
@@ -83,13 +103,16 @@ void* queue_pop(struct queue* queue)
    else
       fetch_and_dec(&queue->size)
       
+   // Get hazardous pointer
+   struct queue_item** cur = get_var(cur);
+      
    // Naive queue pop
    void* result;
    for(;;)
    {
-      struct queue_item* head = queue->head;
-      struct queue_item* tail = queue->tail;
-      struct queue_item* next = head->next;
+      struct queue_item* head = atomic_load_item(queue->head);
+      struct queue_item* tail = atomic_load_item(queue->tail);
+      struct queue_item* next = atomic_load_item(head->next);
       if(head == queue->head)
       {
          if(head == tail)
