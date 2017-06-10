@@ -95,6 +95,8 @@ target_link_libraries (dynamic_classifiers
 						     hash_table
 						     memory_management
                        byte_stream)
+target_link_libraries (queue
+                       memory_management)
 target_link_libraries (static_classifiers 
                        hash_table
 						     memory_management

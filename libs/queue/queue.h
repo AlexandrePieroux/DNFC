@@ -15,8 +15,8 @@ struct queue_item{
 struct queue{
    struct queue_item* head;
    struct queue_item* tail;
-   uint32_t size;
-   uint32_t max_size;
+   size_t size;
+   size_t max_size;
 };
 
 struct queue* new_queue(uint32_t capacity);
