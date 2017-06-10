@@ -8,6 +8,11 @@
 #define fetch_and_dec(n) __sync_fetch_and_sub (n, 1)
 
 /*                                     Private function                                               */
+// Instantiate a new queue item that contain 'data'
+struct queue_item* new_queue_item(void* data)
+
+// Delete a node (memory management)
+void delete_node(struct queue_item* node);
 
 // Retreive a thread context variable denoted by the key.
 struct queue_item** get_var(pthread_key_t key);
@@ -98,36 +103,60 @@ bool queue_push(struct queue* queue, void* data)
 
 void* queue_pop(struct queue* queue)
 {
+   // Check if there are elements in the queue before pop
    if(queue->size <= 0)
       return false;
    else
       fetch_and_dec(&queue->size)
       
-   // Get hazardous pointer
-   struct queue_item** cur = get_var(cur);
+   // Get hazardous pointers
+   struct queue_item** hp_cur = get_var(cur);
+   struct queue_item** hp_next = get_var(next);
       
-   // Naive queue pop
    void* result;
    for(;;)
    {
+      // Load the head of the queue and make the hazard pointer point to it
       struct queue_item* head = atomic_load_item(queue->head);
+      *hp_cur = head;
+      
+      // Check that the head does not have changed
+      if(head != atomic_load_item(queue->head))
+         continue;
+      
+      // Load the tail and the next item of the head and make the hazard pointer point to it
       struct queue_item* tail = atomic_load_item(queue->tail);
       struct queue_item* next = atomic_load_item(head->next);
-      if(head == queue->head)
+      *hp_next = next;
+      
+      // Check that the head does not have changed
+      if(head != atomic_load_item(queue->head))
+         continue;
+      
+      // If there is no next to the head we return (this that we encountered the dummy node)
+      if(!next)
       {
-         if(head == tail)
-         {
-            if(next == NULL)
-               return false;
-            atomic_compare_and_swap(&queue->tail, tail, next);
-         } else {
-            result = next->data;
-            if(atomic_compare_and_swap(&queue->head, head, next)
-               break;
-         }
+         *hp_cur = NULL;
+         return NULL;
       }
+      
+      // If the head is also the tail we advance the pointer of the tail to 'next'
+      if(head == tail)
+      {
+         atomic_compare_and_swap(&queue->tail, tail, next);
+         continue;
+      }
+      
+      // Get the data and set the head to the next
+      result = next->data;
+      if(atomic_compare_and_swap(&queue->head, head, next)
+         break;
    }
-   free(head);
+   
+   // Clean hazard pointers and delete the node
+   *hp_cur = NULL;
+   *hp_next = NULL;
+   delete_node(head);
    return result;
 }
 
@@ -145,6 +174,12 @@ struct queue_item* new_queue_item(void* data)
    struct queue_item* result = chkmalloc(sizeof *result);
    result->next = NULL;
    result->data = data;
+}
+         
+void delete_node(struct queue_item* node)
+{
+   // TODO
+   return;
 }
 
 struct queue_item** get_var(pthread_key_t key)

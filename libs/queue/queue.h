@@ -8,7 +8,7 @@
 #include "../memory_management/memory_management.h"
 
 struct queue_item{
-   struct queue_item* next:
+   struct queue_item* next;
    void* data;
 };
 
