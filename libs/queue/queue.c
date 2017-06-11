@@ -162,8 +162,14 @@ void* queue_pop(struct queue* queue)
 
 void free_queue(struct queue* queue)
 {
-   // TODO
-   return NULL;
+   struct queue_item* next = queue->head;
+   while(next)
+   {
+      struct queue_item* tmp = next->next;
+      free(next);
+      next = tmp;
+   }
+   free(queue);
 }
 
 
