@@ -7,41 +7,20 @@
 #define fetch_and_inc(n) __sync_fetch_and_add (n, 1)
 #define fetch_and_dec(n) __sync_fetch_and_sub (n, 1)
 
+#define cur_index 0
+#define next_index 1
+
 /*                                     Private function                                               */
+
 // Instantiate a new queue item that contain 'data'
 struct queue_item* new_queue_item(void* data);
 
-// Delete a node (memory management)
-void delete_node(struct queue_item* node);
-
-// Retreive a thread context variable denoted by the key.
-struct queue_item** get_var(pthread_key_t key);
-
-// Create the key of the hasard pointers.
-void make_keys(void);
-
 /*                                     Private function                                               */
-
-
-/*                                     Private per thread variables                                           */
-
-static pthread_once_t key_once = PTHREAD_ONCE_INIT;
-static pthread_key_t cur;
-static pthread_key_t next;
-
-/*                                     Private per thread variables                                           */
-
-
-
-void queue_init(void)
-{
-   pthread_once(&key_once, make_keys);
-}
 
 
 /* Queue functions */
 
-struct queue* new_queue(size_t capacity)
+struct queue* new_queue(size_t capacity, size_t nb_thread)
 {
    struct queue* queue = chkmalloc(sizeof *queue);
    struct queue_item* dummy_node = new_queue_item(NULL);
@@ -49,6 +28,7 @@ struct queue* new_queue(size_t capacity)
    queue->max_size = capacity;
    queue->head = dummy_node;
    queue->tail = dummy_node;
+   queue->hp = new_hazard_pointer(2, nb_thread);
    return queue;
 }
 
@@ -61,7 +41,7 @@ bool queue_push(struct queue* queue, void* data)
       fetch_and_inc(&queue->size);
       
    // Get hazardous pointer
-   struct queue_item** cur = get_var(cur);
+   struct queue_item** cur = (struct queue_item**) hp_get(queue->hp, cur_index);
    
    // Prepare new data
    struct queue_item* node = new_queue_item(data);
@@ -111,8 +91,8 @@ void* queue_pop(struct queue* queue)
       fetch_and_dec(&queue->size);
       
    // Get hazardous pointers
-   struct queue_item** hp_cur = get_var(cur);
-   struct queue_item** hp_next = get_var(next);
+   struct queue_item** hp_cur = (struct queue_item**) hp_get(queue->hp, cur_index);
+   struct queue_item** hp_next = (struct queue_item**) hp_get(queue->hp, next_index);
       
    void* result;
    struct queue_item* head;
@@ -158,7 +138,7 @@ void* queue_pop(struct queue* queue)
    // Clean hazard pointers and delete the node
    *hp_cur = NULL;
    *hp_next = NULL;
-   delete_node(head);
+   hp_delete_node(queue->hp, head);
    return result;
 }
 
@@ -183,27 +163,4 @@ struct queue_item* new_queue_item(void* data)
    result->next = NULL;
    result->data = data;
    return result;
-}
-         
-void delete_node(struct queue_item* node)
-{
-   // TODO
-   return;
-}
-
-struct queue_item** get_var(pthread_key_t key)
-{
-   void** p = pthread_getspecific(key);
-   if(!p)
-   {
-      p = chkcalloc(sizeof *p, 1);
-      pthread_setspecific(key, p);
-   }
-   return (struct queue_item**) p;
-}
-
-void make_keys()
-{
-   pthread_key_create(&cur, NULL);
-   pthread_key_create(&next, NULL);
 }

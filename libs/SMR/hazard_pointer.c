@@ -76,15 +76,6 @@ bool hp_subscribe(struct hazard_pointer* hp)
 }
 
 
-void hp_set(struct hazard_pointer* hp, uint32_t index, void* data)
-{
-   uint32_t thread_id = get_id(hp->id_k);
-   index %= hp->size;
-   uint32_t pointer_id = (thread_id - 1) * hp->size + index;
-   hp->hp[pointer_id] = data;
-}
-
-
 void* hp_get(struct hazard_pointer* hp, uint32_t index)
 {
    uint32_t thread_id = get_id(hp->id_k);

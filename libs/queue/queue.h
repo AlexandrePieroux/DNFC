@@ -16,9 +16,10 @@ struct queue{
    struct queue_item* tail;
    size_t size;
    size_t max_size;
+   struct hazard_pointer* hp;
 };
 
-struct queue* new_queue(size_t capacity);
+struct queue* new_queue(size_t capacity, size_t nb_thread);
 
 bool queue_push(struct queue* queue, void* data);
 
