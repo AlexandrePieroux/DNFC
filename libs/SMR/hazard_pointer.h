@@ -16,11 +16,16 @@ struct hazard_pointer{
    pthread_key_t* dcount_k;
    pthread_key_t* dlist_k;
    pthread_key_t* id_k;
+   void (*free_node)(void*);
 };
 
 struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads);
 
 bool hp_subscribe(struct hazard_pointer* hp);
+
+void hp_set(struct hazard_pointer* hp, uint32_t index, void* data);
+
+void* hp_get(struct hazard_pointer* hp, uint32_t index);
 
 void hp_delete_node(struct hazard_pointer* hp, void* node);
 

@@ -9,7 +9,7 @@
 
 /*                                     Private function                                               */
 // Instantiate a new queue item that contain 'data'
-struct queue_item* new_queue_item(void* data)
+struct queue_item* new_queue_item(void* data);
 
 // Delete a node (memory management)
 void delete_node(struct queue_item* node);
@@ -58,7 +58,7 @@ bool queue_push(struct queue* queue, void* data)
    if(queue->size >= queue->max_size)
       return false;
    else
-      fetch_and_inc(&queue->size)
+      fetch_and_inc(&queue->size);
       
    // Get hazardous pointer
    struct queue_item** cur = get_var(cur);
@@ -67,21 +67,22 @@ bool queue_push(struct queue* queue, void* data)
    struct queue_item* node = new_queue_item(data);
    
    // Till we succeed
+   struct queue_item* tail;
    for(;;)
    {
       // Load tail and make the hazard point to it
-      struct queue_item* tail = atomic_load_item(queue->tail);
+      tail = atomic_load_item(&queue->tail);
       *cur = tail;
       
       // Check that the tail does not have changed
-      if(tail != atomic_load_item(queue->tail))
+      if(tail != atomic_load_item(&queue->tail))
          continue;
       
       // Read the next node of tail (should be null)
-      struct queue_item* next = atomic_load_item(tail->next);
+      struct queue_item* next = atomic_load_item(&tail->next);
       
       // Check that the tail does not have changed
-      if(tail != atomic_load_item(queue->tail))
+      if(tail != atomic_load_item(&queue->tail))
          continue;
       
       // If next is not null we advance the pointer of the tail to the next node
@@ -107,30 +108,31 @@ void* queue_pop(struct queue* queue)
    if(queue->size <= 0)
       return false;
    else
-      fetch_and_dec(&queue->size)
+      fetch_and_dec(&queue->size);
       
    // Get hazardous pointers
    struct queue_item** hp_cur = get_var(cur);
    struct queue_item** hp_next = get_var(next);
       
    void* result;
+   struct queue_item* head;
    for(;;)
    {
       // Load the head of the queue and make the hazard pointer point to it
-      struct queue_item* head = atomic_load_item(queue->head);
+      head = atomic_load_item(&queue->head);
       *hp_cur = head;
       
       // Check that the head does not have changed
-      if(head != atomic_load_item(queue->head))
+      if(head != atomic_load_item(&queue->head))
          continue;
       
       // Load the tail and the next item of the head and make the hazard pointer point to it
-      struct queue_item* tail = atomic_load_item(queue->tail);
-      struct queue_item* next = atomic_load_item(head->next);
+      struct queue_item* tail = atomic_load_item(&queue->tail);
+      struct queue_item* next = atomic_load_item(&head->next);
       *hp_next = next;
       
       // Check that the head does not have changed
-      if(head != atomic_load_item(queue->head))
+      if(head != atomic_load_item(&queue->head))
          continue;
       
       // If there is no next to the head we return (this that we encountered the dummy node)
@@ -149,7 +151,7 @@ void* queue_pop(struct queue* queue)
       
       // Get the data and set the head to the next
       result = next->data;
-      if(atomic_compare_and_swap(&queue->head, head, next)
+      if(atomic_compare_and_swap(&queue->head, head, next))
          break;
    }
    
@@ -180,6 +182,7 @@ struct queue_item* new_queue_item(void* data)
    struct queue_item* result = chkmalloc(sizeof *result);
    result->next = NULL;
    result->data = data;
+   return result;
 }
          
 void delete_node(struct queue_item* node)

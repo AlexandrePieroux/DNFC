@@ -7,19 +7,19 @@
 /*                Private function                     */
 
 // Retreive a thread context variable denoted by 'dcount'.
-uint32_t** get_dcount(pthread_key_t dcount_k);
+uint32_t* get_dcount(pthread_key_t dcount_k);
 
 // Retreive a thread context variable denoted by 'id'.
 uint32_t* get_id(pthread_key_t id_k);
 
 // Retreive a thread context variable denoted by 'dlist'.
-void** get_dlist(pthread_key_t dlist_k);
+void** get_dlist(pthread_key_t dlist_k, size_t size);
 
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
 
 // Compare function for qs
-int cmpfunc (void* a, void * b);
+int cmpfunc (const void* a, const void* b);
 
 // Binary search
 int binary_search(void** arr, int l, int r, int x);
@@ -63,7 +63,7 @@ bool hp_subscribe(struct hazard_pointer* hp)
    {
       id = atomic_load(&hp->subscribed_threads);
       uint32_t next_id = id + 1;
-      if(id >= atomic_load(&hp->nb_threads))
+      if(id >= (uint32_t)atomic_load(&hp->nb_threads))
          return false;
       if(atomic_compare_and_swap(&hp->subscribed_threads, id, next_id))
          break;
@@ -76,13 +76,32 @@ bool hp_subscribe(struct hazard_pointer* hp)
 }
 
 
+void hp_set(struct hazard_pointer* hp, uint32_t index, void* data)
+{
+   uint32_t thread_id = get_id(hp->id_k);
+   index %= hp->size;
+   uint32_t pointer_id = (thread_id - 1) * hp->size + index;
+   hp->hp[pointer_id] = data;
+}
+
+
+void* hp_get(struct hazard_pointer* hp, uint32_t index)
+{
+   uint32_t thread_id = get_id(hp->id_k);
+   index %= hp->size;
+   uint32_t pointer_id = (thread_id - 1) * hp->size + index;
+   return hp->hp[pointer_id];
+}
+
+
 void hp_delete_node(struct hazard_pointer* hp, void* node)
 {
-   void** dlist = get_dlist(hp->dlist_k);
-   uint32_t* dcount = get_dcount(hp->dcount_k);
+   size_t batch_size = hp->nb_threads * hp->size * 2;
+   void** dlist = get_dlist(hp->dlist_k, batch_size);
+   uint32_t* dcount = *get_dcount(hp->dcount_k);
    (*dcount)++;
-   (*dlist)[dcount] = node;
-   if(*dcount == (hp->nb_threads * hp->size * 2))
+   dlist[*dcount] = node;
+   if(*dcount == batch_size)
       hp_scan(hp);
 }
 
@@ -93,7 +112,7 @@ void hp_delete_node(struct hazard_pointer* hp, void* node)
 uint32_t* get_dcount(pthread_key_t dcount_k)
 {
    void* dcount = pthread_getspecific(dcount_k);
-   if(!p)
+   if(!dcount)
    {
       dcount = chkcalloc(sizeof *dcount, 1);
       pthread_setspecific(dcount_k, dcount);
@@ -112,27 +131,27 @@ uint32_t* get_id(pthread_key_t id_k)
    return (uint32_t*) id;
 }
 
-void** get_dlist(pthread_key_t dlist_k)
+void** get_dlist(pthread_key_t dlist_k, size_t size)
 {
    void** dlist = pthread_getspecific(dlist_k);
-   if(!p)
+   if(!dlist)
    {
-      dlist = chkcalloc(sizeof *dlist, 1);
+      dlist = chkcalloc(sizeof *dlist, size);
       pthread_setspecific(dlist_k, dlist);
    }
-   return (uint32_t**) dlist;
+   return dlist;
 }
       
 void hp_scan(struct hazard_pointer* hp)
 {
    uint32_t p = 0;
    uint32_t new_dcount = 0;
-   uint32_t nb_pointers = hp->nb_threads * hp->size;
-   uint32_t batch_size = nb_pointers * 2;
+   size_t nb_pointers = hp->nb_threads * hp->size;
+   size_t batch_size = nb_pointers * 2;
    void** plist = chkmalloc(sizeof(*plist) * nb_pointers);
    void** new_dlist = chkmalloc(sizeof(*new_dlist) * batch_size);
    
-   void** dlist = get_dlist(hp->dlist_k);
+   void** dlist = get_dlist(hp->dlist_k, batch_size);
    uint32_t* dcount = get_dcount(hp->dcount_k);
    
    
@@ -140,11 +159,11 @@ void hp_scan(struct hazard_pointer* hp)
    for(uint32_t i = 0; i < nb_pointers; ++i)
    {
       if(hp->hp[i])
-         plist[p++] = hp->hp[i];
+         plist[p++] = atomic_load(&hp->hp[i]);
    }
    
    // Stage 2
-   qsort(plist, p, sizeof(*plist), cmpfunc);
+   qsort(plist, p, sizeof(void*), cmpfunc);
    
    // Stage 3
    for(uint32_t i = 0; i < batch_size; ++i)
@@ -152,7 +171,7 @@ void hp_scan(struct hazard_pointer* hp)
       if(binary_search(plist, 0, p, dlist[i]))
          new_dlist[new_dcount++] = dlist[i];
       else
-         free(dlist[i]); // Call a callback method not 'free'
+         hp->free_node(dlist[i]);
    }
    
    // Stage 4
@@ -166,9 +185,9 @@ void hp_scan(struct hazard_pointer* hp)
    free(new_dlist);
 }
 
-int cmpfunc (void* a, void * b)
+int cmpfunc (const void* a, const void* b)
 {
-   return (a - b);
+   return (*(void**)a - *(void**)b);
 }
 
 int binary_search(void** arr, int l, int r, int x)
@@ -178,15 +197,15 @@ int binary_search(void** arr, int l, int r, int x)
       int mid = l + (r - l)/2;
       
       // If the element is present at the middle itself
-      if (arr[mid] == x)
+      if ((uint32_t)arr[mid] == x)
          return mid;
       
       // Search left
-      if (arr[mid] > x)
-         return binarySearch(arr, l, mid-1, x);
+      if ((uint32_t)arr[mid] > x)
+         return binary_search(arr, l, mid - 1, x);
       
-      // Search right
-      return binarySearch(arr, mid+1, r, x);
+      // Else search right
+      return binary_search(arr, mid + 1, r, x);
    }
    
    // Not found
