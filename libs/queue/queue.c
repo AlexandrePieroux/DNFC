@@ -15,6 +15,9 @@
 // Instantiate a new queue item that contain 'data'
 struct queue_item* new_queue_item(void* data);
 
+// Free item function
+void free_item(void* item);
+
 /*                                     Private function                                               */
 
 
@@ -28,7 +31,7 @@ struct queue* new_queue(size_t capacity, size_t nb_thread)
    queue->max_size = capacity;
    queue->head = dummy_node;
    queue->tail = dummy_node;
-   queue->hp = new_hazard_pointer(2, nb_thread);
+   queue->hp = new_hazard_pointer(2, nb_thread, free_item);
    return queue;
 }
 
@@ -163,4 +166,9 @@ struct queue_item* new_queue_item(void* data)
    result->next = NULL;
    result->data = data;
    return result;
+}
+
+void free_item(void* item)
+{
+   free((struct queue_item*)item);
 }

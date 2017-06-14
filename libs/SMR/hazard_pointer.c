@@ -10,10 +10,12 @@
 uint32_t* get_dcount(pthread_key_t dcount_k);
 
 // Retreive a thread context variable denoted by 'id'.
-uint32_t* get_id(pthread_key_t id_k);
+uint32_t* get_id(struct hazard_pointer* hp);
 
 // Retreive a thread context variable denoted by 'dlist'.
 void** get_dlist(pthread_key_t dlist_k, size_t size);
+
+uint32_t hp_subscribe(struct hazard_pointer* hp);
 
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
@@ -28,7 +30,7 @@ int binary_search(void** arr, int l, int r, int x);
 
 
 
-struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads)
+struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (*free_node)(void*))
 {
    // Allocate the structure and the basic data
    struct hazard_pointer* result = chkmalloc(sizeof(*result));
@@ -36,6 +38,7 @@ struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads)
    result->nb_threads = nb_threads;
    result->size = size;
    result->subscribed_threads = 0;
+   result->free_node = free_node;
    
    // Init pthread private variables
    pthread_key_t* dcount_k = chkmalloc(sizeof(*dcount_k));
@@ -55,43 +58,22 @@ struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads)
 }
 
 
-bool hp_subscribe(struct hazard_pointer* hp)
+void** hp_get(struct hazard_pointer* hp, uint32_t index)
 {
-   // Subscribe and get an id
-   uint32_t id;
-   for(;;)
-   {
-      id = atomic_load(&hp->subscribed_threads);
-      uint32_t next_id = id + 1;
-      if(id >= (uint32_t)atomic_load(&hp->nb_threads))
-         return false;
-      if(atomic_compare_and_swap(&hp->subscribed_threads, id, next_id))
-         break;
-   }
-   
-   // Store the id in the private variable
-   uint32_t* private_id = get_id(hp->id_k);
-   *private_id = id + 1;
-   return true;
-}
-
-
-void* hp_get(struct hazard_pointer* hp, uint32_t index)
-{
-   uint32_t thread_id = get_id(hp->id_k);
+   uint32_t thread_id = *get_id(hp);
    index %= hp->size;
    uint32_t pointer_id = (thread_id - 1) * hp->size + index;
-   return hp->hp[pointer_id];
+   return &hp->hp[pointer_id];
 }
 
 
 void hp_delete_node(struct hazard_pointer* hp, void* node)
 {
    size_t batch_size = hp->nb_threads * hp->size * 2;
-   void** dlist = get_dlist(hp->dlist_k, batch_size);
-   uint32_t* dcount = *get_dcount(hp->dcount_k);
-   (*dcount)++;
+   void** dlist = get_dlist(*hp->dlist_k, batch_size);
+   uint32_t* dcount = get_dcount(*hp->dcount_k);
    dlist[*dcount] = node;
+   (*dcount)++;
    if(*dcount == batch_size)
       hp_scan(hp);
 }
@@ -105,19 +87,20 @@ uint32_t* get_dcount(pthread_key_t dcount_k)
    void* dcount = pthread_getspecific(dcount_k);
    if(!dcount)
    {
-      dcount = chkcalloc(sizeof *dcount, 1);
+      dcount = chkcalloc(1, sizeof *dcount);
       pthread_setspecific(dcount_k, dcount);
    }
    return (uint32_t*) dcount;
 }
 
-uint32_t* get_id(pthread_key_t id_k)
+uint32_t* get_id(struct hazard_pointer* hp)
 {
-   void* id = pthread_getspecific(id_k);
+   void* id = pthread_getspecific(*hp->id_k);
    if(!id)
    {
-      id = chkcalloc(sizeof *id, 1);
-      pthread_setspecific(id_k, id);
+      id = chkcalloc(1, sizeof *id);
+      pthread_setspecific(*hp->id_k, id);
+      *(uint32_t*)id = hp_subscribe(hp);
    }
    return (uint32_t*) id;
 }
@@ -127,10 +110,27 @@ void** get_dlist(pthread_key_t dlist_k, size_t size)
    void** dlist = pthread_getspecific(dlist_k);
    if(!dlist)
    {
-      dlist = chkcalloc(sizeof *dlist, size);
+      dlist = chkcalloc(size, sizeof *dlist);
       pthread_setspecific(dlist_k, dlist);
    }
    return dlist;
+}
+
+uint32_t hp_subscribe(struct hazard_pointer* hp)
+{
+   // Subscribe and get an id
+   uint32_t id;
+   uint32_t next_id;
+   for(;;)
+   {
+      id = atomic_load(&hp->subscribed_threads);
+      next_id = id + 1;
+      if(id >= (uint32_t)atomic_load(&hp->nb_threads))
+         return false;
+      if(atomic_compare_and_swap(&hp->subscribed_threads, id, next_id))
+         break;
+   }
+   return next_id;
 }
       
 void hp_scan(struct hazard_pointer* hp)
@@ -139,12 +139,11 @@ void hp_scan(struct hazard_pointer* hp)
    uint32_t new_dcount = 0;
    size_t nb_pointers = hp->nb_threads * hp->size;
    size_t batch_size = nb_pointers * 2;
-   void** plist = chkmalloc(sizeof(*plist) * nb_pointers);
+   void** plist = chkcalloc(nb_pointers, sizeof(*plist));
    void** new_dlist = chkmalloc(sizeof(*new_dlist) * batch_size);
    
-   void** dlist = get_dlist(hp->dlist_k, batch_size);
-   uint32_t* dcount = get_dcount(hp->dcount_k);
-   
+   void** dlist = get_dlist(*hp->dlist_k, batch_size);
+   uint32_t* dcount = get_dcount(*hp->dcount_k);
    
    // Stage 1
    for(uint32_t i = 0; i < nb_pointers; ++i)
@@ -200,7 +199,7 @@ int binary_search(void** arr, int l, int r, int x)
    }
    
    // Not found
-   return -1;
+   return NULL;
 }
 
 /*                Private function                     */

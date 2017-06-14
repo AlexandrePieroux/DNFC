@@ -19,11 +19,9 @@ struct hazard_pointer{
    void (*free_node)(void*);
 };
 
-struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads);
+struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (*free_node)(void*));
 
-bool hp_subscribe(struct hazard_pointer* hp);
-
-void* hp_get(struct hazard_pointer* hp, uint32_t index);
+void** hp_get(struct hazard_pointer* hp, uint32_t index);
 
 void hp_delete_node(struct hazard_pointer* hp, void* node);
 

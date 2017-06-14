@@ -77,7 +77,6 @@ add_library (linked_list ${LINKED_LIST})
 add_library (hash_table ${HASH_TABLE})
 add_library (queue ${QUEUE})
 add_library (thread_pool ${THREAD_POOL})
-
 add_library (dynamic_classifiers ${DYNAMIC_CLASSIFIERS})
 add_library (static_classifiers ${STATIC_CLASSIFIERS})
 
