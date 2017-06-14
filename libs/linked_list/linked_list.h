@@ -62,31 +62,6 @@ struct linked_list
 
 
 /*******************************************************************
-* NAME :                 void linked_list_init ( void )
-*
-* DESCRIPTION :      Initialize the linked list library.
-*
-* INPUTS :
-*       PARAMETERS:
-*           None
-*       GLOBALS :
-*           None
-* OUTPUTS :
-*       PARAMETERS:
-*            None
-*       GLOBALS :
-*           None
-*       RETURN :
-*           None
-*
-*
-* NOTES :      NONE
-*******************************************************************/
-void linked_list_init(void);
-
-
-
-/*******************************************************************
 * NAME :                 struct linked_list* new_linked_list ( uint32_t , void* )
 *
 * DESCRIPTION :      Initialize a new linked list element. Each element is a
@@ -112,8 +87,7 @@ void linked_list_init(void);
 struct linked_list* new_linked_list(
   key_type key,
   hash_type hash,
-  data_type data,
-  struct linked_list** pool);
+  data_type data);
 
 
 
@@ -142,8 +116,7 @@ struct linked_list* new_linked_list(
 *******************************************************************/
 struct linked_list* linked_list_insert(
   struct linked_list** list,
-  struct linked_list* item,
-  struct linked_list** pool);
+  struct linked_list* item);
 
 
 
@@ -173,8 +146,7 @@ struct linked_list* linked_list_insert(
 struct linked_list* linked_list_get(
   struct linked_list** list,
   key_type key,
-  hash_type hash,
-  struct linked_list** pool);
+  hash_type hash);
 
 
 
@@ -204,8 +176,7 @@ struct linked_list* linked_list_get(
 bool linked_list_find(
   struct linked_list** list,
   key_type key,
-  hash_type hash,
-  struct linked_list** pool);
+  hash_type hash);
 
 
 
@@ -233,8 +204,7 @@ bool linked_list_find(
 bool linked_list_delete(
   struct linked_list** list,
   key_type key,
-  hash_type hash,
-  struct linked_list** pool);
+  hash_type hash);
 
 
 
@@ -258,28 +228,5 @@ bool linked_list_delete(
 * NOTES :      NONE
 *******************************************************************/
 void linked_list_free(struct linked_list** list);
-
-
-
-/*******************************************************************
-* NAME :                 void linked_list_free ( struct linked_list* )
-*
-* DESCRIPTION :      Free the specified linked list.
-*
-* INPUTS :
-*       PARAMETERS:
-*           struct linked_list* list             The linked list to free.
-*       GLOBALS :
-*           None
-* OUTPUTS :
-*       PARAMETERS:
-*            None
-*       GLOBALS :
-*       RETURN :
-*            None
-*
-* NOTES :      NONE
-*******************************************************************/
-struct linked_list* get_cur(void);
 
 #endif

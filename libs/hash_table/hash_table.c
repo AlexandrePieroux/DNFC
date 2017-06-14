@@ -75,22 +75,14 @@
 
 
 
-  void hash_table_init(void)
-  {
-     linked_list_init();
-  }
-
-
-
   struct hash_table* new_hash_table(uint32_t hash_type)
   {
      struct hash_table* result = chkmalloc(sizeof *result);
      result->index = chkcalloc(32, (sizeof result->index)); // this can be optimized (index length of 32 by default)
-     result->pool = NULL;
 
      // First dummy node
      result->index[0] = chkcalloc(1, sizeof (struct linked_list*));
-     result->index[0][0] = new_linked_list(0, 0, NULL, &result->pool);
+     result->index[0][0] = new_linked_list(0, 0, NULL);
 
      result->size = 1;
      result->nb_elements = 0;
@@ -104,11 +96,11 @@
   {
      uint32_t pre_hash = table->hash(key);
      uint32_t hash = compress(pre_hash, table->size);
-     struct linked_list* node = new_linked_list(key, so_regular(pre_hash), value, &table->pool);
+     struct linked_list* node = new_linked_list(key, so_regular(pre_hash), value);
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     struct linked_list* result = linked_list_insert(&bucket, node, &table->pool);
+     struct linked_list* result = linked_list_insert(&bucket, node);
      if(result != node)
      {
         free(node);
@@ -130,7 +122,7 @@
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     struct linked_list* result = linked_list_get(&bucket, key, so_regular(pre_hash), &table->pool);
+     struct linked_list* result = linked_list_get(&bucket, key, so_regular(pre_hash));
      if(result)
       return atomic_load_list(&result->data);
      else
@@ -146,7 +138,7 @@
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     if(!linked_list_delete(&bucket, key, so_regular(pre_hash), &table->pool))
+     if(!linked_list_delete(&bucket, key, so_regular(pre_hash)))
         return false;
      fetch_and_dec(&table->nb_elements);
      return true;
@@ -157,7 +149,6 @@
   void hash_table_free(struct hash_table** table)
   {
      linked_list_free(*((*table)->index));
-     linked_list_free(&(*table)->pool);
 
      for (uint32_t i = 0; i < (*table)->size; ++i)
      {
@@ -264,8 +255,8 @@
      uint32_t so_hash = so_dummy(hash);
      key_type hash_dummy = new_byte_stream();
      append_bytes(hash_dummy, &so_hash, 4);
-     struct linked_list* dummy = new_linked_list(hash_dummy, so_hash, NULL, &table->pool);
-     struct linked_list* result = linked_list_insert(&bucket, dummy, &table->pool);
+     struct linked_list* dummy = new_linked_list(hash_dummy, so_hash, NULL);
+     struct linked_list* result = linked_list_insert(&bucket, dummy);
      if (result != dummy)
      {
         free(dummy);

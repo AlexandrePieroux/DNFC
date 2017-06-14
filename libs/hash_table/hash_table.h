@@ -62,43 +62,10 @@
 struct hash_table
 {
    struct linked_list*** index;
-   struct linked_list* pool;
    uint32_t size;
    uint32_t nb_elements;
    uint32_t (*hash)(key_type);
 };
-
-
-
-/*******************************************************************
-* NAME :                 struct hash_table* new_hash_table(int)
-*
-* DESCRIPTION :      Initialize a new hash table of size 2^"size". The hash table size is dynamicaly
-*                             updated when the density reach 75%, the size is then doubled. The maximum
-*                             number of elements that a hash table can contain is 2^32 elements.
-*
-* INPUTS :
-*       PARAMETERS:
-*           int hash_type            The type of hash function.
-*           uint32_t size             The initial size of the hash table.
-*       GLOBALS :
-*           None
-* OUTPUTS :
-*       PARAMETERS:
-*            None
-*       GLOBALS :
-*            struct hash_table* table         The output hash table allocated.
-*       RETURN :
-*            Type:     struct hash_table*
-*            Values:   table                         Sucessfully allocated hash table
-*
-* PROCESS :
-*                   [1]  Allocate the structure
-*                   [2]  Initialize algorithm variables a and b
-*
-* NOTES :      NONE
-*******************************************************************/
-void hash_table_init(void);
 
 
 
