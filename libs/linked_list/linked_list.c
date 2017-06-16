@@ -4,8 +4,21 @@
 #define atomic_load_list(p) ({struct linked_list* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
 #define store_barrier __builtin_ia32_sfence
 
+#define prev_hp_index 0
+#define cur_hp_index  1
+#define next_hp_index 2
 
 /*                                     Private function                                               */
+
+// Find a given node and set the hazard pointer on it and its predecesor
+bool linked_list_find(
+  struct hazard_pointer* hp,
+  struct linked_list** list,
+  key_type key,
+  hash_type hash);
+
+// Retreive a thread context variable denoted by the key.
+struct linked_list** get_var(pthread_key_t key);
 
 // Retrieve the mark bit.
 uintptr_t get_bit(struct linked_list* list);
@@ -19,7 +32,25 @@ struct linked_list*  get_list_pointer(struct linked_list* list);
 // Delete a specified node.
 void delete_node(struct linked_list* node);
 
+// Create the key of private variable per thread.
+void make_keys(void);
+
 /*                                     Private function                                               */
+
+/*                                     Private per thread variables                                           */
+
+static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+static pthread_key_t cur;
+static pthread_key_t prev;
+
+/*                                     Private per thread variables                                           */
+
+
+
+void linked_list_init(void)
+{
+   pthread_once(&key_once, make_keys);
+}
 
 
 
@@ -39,104 +70,122 @@ struct linked_list* new_linked_list(
 
 
 struct linked_list* linked_list_insert(
+  struct hazard_pointer* hp,
   struct linked_list** list,
   struct linked_list* item)
 {
    key_type key = item->key;
    hash_type hash = item->hash;
-   struct linked_list** cur_p = get_var(cur); // TODO
-   struct linked_list** prev_p = get_var(prev); // TODO
-
+   
+   // Hazard pointers
+   struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
+   struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
+   struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
+   
+   // Private per thread variables
+   struct linked_list** cur_p = get_var(cur);
+   struct linked_list** prev_p = get_var(prev);
+   
+   struct linked_list* result;
+   
    store_barrier();
    for(;;)
    {
-      if(linked_list_find(list, key, hash))
-         return *(get_var(cur));
+      if(linked_list_find(hp, list, key, hash))
+      {
+         result = *cur_p;
+         break;
+      }
       item->next = *cur_p;
       if(atomic_compare_and_swap(&(*prev_p)->next, get_list_pointer(*cur_p), item))
-         return item;
+      {
+         result = item;
+         break;
+      }
    }
+   
+   *prev_hp = NULL;
+   *cur_hp = NULL;
+   *next_hp = NULL;
+   
+   return result;
 }
 
 
 
 struct linked_list* linked_list_get(
+  struct hazard_pointer* hp,
   struct linked_list** list,
   key_type key,
   hash_type hash)
 {
-   if(linked_list_find(list, key, hash))
-      return *(get_var(cur)); // TODO
-   return NULL;
-}
-
-
-
-bool linked_list_find(
-  struct linked_list** list,
-  key_type key,
-  hash_type hash)
-{
-   struct linked_list** prev_p = get_var(prev); // TODO
-   struct linked_list** cur_p = get_var(cur); // TODO
-
-   for(;;)
+   // Hazard pointers
+   struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
+   struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
+   struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
+   
+   // Private per thread variable
+   struct linked_list** cur_p = get_var(cur);
+   
+   struct linked_list* result = NULL;
+   
+   if(linked_list_find(hp, list, key, hash))
    {
-      *prev_p = *list;
-      *cur_p = get_list_pointer((*prev_p)->next);
-
-      for(;;)
-      {
-         if(!(*cur_p))
-            return NULL;
-
-         key_type ckey = (*cur_p)->key;
-         hash_type chash = (*cur_p)->hash;
-         struct linked_list* next = atomic_load_list(&(*cur_p)->next);
-
-         if(atomic_load_list(&(*prev_p)->next) != *cur_p)
-            break;
-
-         if(!get_bit(next))
-         {
-            bool eq = byte_stream_eq(ckey, key);
-            if(chash > hash || (eq && chash == hash))
-               return eq;
-            *prev_p = *cur_p;
-         } else {
-            if(atomic_compare_and_swap(&(*prev_p)->next, (*cur_p), get_list_pointer(next)))
-               delete_node(get_list_pointer(*cur_p));
-            else
-               break;
-         }
-         *cur_p = next;
-      }
+      result = *(cur_p);
    }
+   
+   *prev_hp = NULL;
+   *cur_hp = NULL;
+   *next_hp = NULL;
+   
+   return result;
 }
 
 
 
-bool linked_list_delete(struct linked_list** list,
+bool linked_list_delete(
+  struct hazard_pointer* hp,
+  struct linked_list** list,
   key_type key,
   hash_type hash)
 {
-   struct linked_list** prev_p = get_var(prev); // TODO
-   struct linked_list** cur_p = get_var(cur); // TODO
+   // Hazard pointers
+   struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
+   struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
+   struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
+   
+   // Private per thread variables
+   struct linked_list** cur_p = get_var(cur);
+   struct linked_list** prev_p = get_var(prev);
+   
+   struct linked_list* next;
+   bool result;
 
    for(;;)
    {
-      if(!linked_list_find(list, key, hash))
-         return false;
+      if(!linked_list_find(hp, list, key, hash))
+      {
+         result = false;
+         break;
+      }
 
-      struct linked_list* next = atomic_load_list(&(*cur_p)->next);
+      next = atomic_load_list(&(*cur_p)->next);
       if(!atomic_compare_and_swap(&(*cur_p)->next, next, mark_pointer(next, 1)))
          continue;
       if(atomic_compare_and_swap(&(*prev_p)->next, get_list_pointer(*cur_p), get_list_pointer(next)))
-         delete_node(get_list_pointer(*cur_p));
+         hp_delete_node(hp, get_list_pointer(*cur_p));
       else
-         linked_list_find(list, key, hash);
-      return true;
+         linked_list_find(hp, list, key, hash);
+      
+      result = true;
+      break;
    }
+   
+   *prev_hp = NULL;
+   *cur_hp = NULL;
+   *next_hp = NULL;
+   
+   return result;
 }
 
 
@@ -150,14 +199,97 @@ void linked_list_free(struct linked_list** list)
    {
       next = get_list_pointer(cur_p->next);
       free_byte_stream(cur_p->key);
-      free(cur_p);
+      delete_node(cur_p);
       cur_p = next;
    }
 }
 
 
 
+void delete_node(struct linked_list* node)
+{
+   free(node);
+}
+
 /*                                     Private function                                               */
+
+bool linked_list_find(
+  struct hazard_pointer* hp,
+  struct linked_list** list,
+  key_type key,
+  hash_type hash)
+{
+   // Hazard pointers
+   struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
+   struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
+   struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
+   
+   // Private per thread variables
+   struct linked_list** cur_p = get_var(cur);
+   struct linked_list** prev_p = get_var(prev);
+   
+   struct linked_list* next_p;
+   
+   for(;;)
+   {
+      *prev_p = atomic_load_list(list);
+      *cur_p = get_list_pointer(atomic_load_list(&(*prev_p)->next));
+      
+      *cur_hp = *cur_p;
+      if(atomic_load_list(&(*prev_p)->next) != *cur_p)
+         break;
+      
+      for(;;)
+      {
+         if(!cur_p)
+            return NULL;
+         
+         next_p = atomic_load_list(&(*cur_p)->next);
+         
+         *next_hp = next_p;
+         if(atomic_load_list(&(*cur_p)->next) != next_p)
+            break;
+         
+         key_type ckey = (*cur_p)->key;
+         hash_type chash = (*cur_p)->hash;
+         
+         if(atomic_load_list(&(*prev_p)->next) != *cur_p)
+            break;
+         
+         if(!get_bit(next_p))
+         {
+            bool eq = byte_stream_eq(ckey, key);
+            if(chash > hash || (eq && chash == hash))
+               return eq;
+            prev_p = cur_p;
+            *prev_hp = *cur_p;
+         } else {
+            if(atomic_compare_and_swap(&(*prev_p)->next, *cur_p, get_list_pointer(next_p)))
+               hp_delete_node(hp, get_list_pointer(*cur_p));
+            else
+               break;
+         }
+         *cur_p = next_p;
+         *cur_hp = next_p;
+      }
+   }
+   return false;
+}
+
+
+
+struct linked_list** get_var(pthread_key_t key)
+{
+   void** p = pthread_getspecific(key);
+   if(!p)
+   {
+      p = chkcalloc(sizeof *p, 1);
+      pthread_setspecific(key, p);
+   }
+   return (struct linked_list**) p;
+}
+
+
 
 uintptr_t get_bit(struct linked_list* list)
 {
@@ -180,9 +312,10 @@ struct linked_list* get_list_pointer(struct linked_list* list)
 
 
 
-void delete_node(struct linked_list* node)
+void make_keys()
 {
-   free(node);
+   pthread_key_create(&cur, NULL);
+   pthread_key_create(&prev, NULL);
 }
 
 /*                                     Private function                                               */
