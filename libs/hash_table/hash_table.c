@@ -75,7 +75,7 @@
 
 
 
-  struct hash_table* new_hash_table(uint32_t hash_type)
+  struct hash_table* new_hash_table(uint32_t hash_type, uint32_t nb_threads)
   {
      struct hash_table* result = chkmalloc(sizeof *result);
      result->index = chkcalloc(32, (sizeof result->index)); // this can be optimized (index length of 32 by default)
@@ -87,6 +87,7 @@
      result->size = 1;
      result->nb_elements = 0;
      result->hash = get_hash_func(hash_type);
+     result->hp = linked_list_init(nb_threads);
      return result;
   }
 
@@ -100,7 +101,7 @@
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     struct linked_list* result = linked_list_insert(&bucket, node);
+     struct linked_list* result = linked_list_insert(table->hp, &bucket, node);
      if(result != node)
      {
         free(node);
@@ -122,7 +123,7 @@
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     struct linked_list* result = linked_list_get(&bucket, key, so_regular(pre_hash));
+     struct linked_list* result = linked_list_get(table->hp, &bucket, key, so_regular(pre_hash));
      if(result)
       return atomic_load_list(&result->data);
      else
@@ -138,7 +139,7 @@
      struct linked_list* bucket = get_bucket(hash, table);
      if(!bucket)
         bucket = init_bucket(hash, table);
-     if(!linked_list_delete(&bucket, key, so_regular(pre_hash)))
+     if(!linked_list_delete(table->hp, &bucket, key, so_regular(pre_hash)))
         return false;
      fetch_and_dec(&table->nb_elements);
      return true;
@@ -256,7 +257,7 @@
      key_type hash_dummy = new_byte_stream();
      append_bytes(hash_dummy, &so_hash, 4);
      struct linked_list* dummy = new_linked_list(hash_dummy, so_hash, NULL);
-     struct linked_list* result = linked_list_insert(&bucket, dummy);
+     struct linked_list* result = linked_list_insert(table->hp, &bucket, dummy);
      if (result != dummy)
      {
         free(dummy);

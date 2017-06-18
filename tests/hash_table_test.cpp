@@ -12,7 +12,7 @@ extern "C"
 #include "gtest/gtest.h"
 
 #define NB_NUMBERS      5000000
-#define NB_THREADS      5
+#define NB_THREADS      64
 
 struct arguments_t
 {
@@ -121,13 +121,12 @@ void init(arguments_t** &args)
 {
    // Init phase
    srand(time(NULL));
-   hash_table_init();
    key_type* numbers = get_random_numbers(NB_NUMBERS);
    
    // Preparing the structure
    args = new arguments_t*[NB_THREADS];
    hash_table** table = new hash_table*;
-   *table = new_hash_table(FNV_1);
+   *table = new_hash_table(FNV_1, NB_THREADS);
    
    // We distribute the work per threads
    uint32_t divider = NB_NUMBERS / NB_THREADS;

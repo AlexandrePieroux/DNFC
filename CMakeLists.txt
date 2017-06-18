@@ -86,26 +86,23 @@ add_executable (DNFC ${DNFC})
 
 
 # link Libraries
-target_link_libraries (linked_list
-                       memory_management
-                       byte_stream)
 target_link_libraries (SMR
                        memory_management)
+target_link_libraries (linked_list
+                       SMR
+                       byte_stream)
 target_link_libraries (hash_table
                        linked_list
-                       memory_management
                        byte_stream)
 target_link_libraries (thread_pool
                        memory_management)
 target_link_libraries (dynamic_classifiers 
 						     hash_table
-						     memory_management
                        byte_stream)
 target_link_libraries (queue
                        SMR)
 target_link_libraries (static_classifiers 
                        hash_table
-						     memory_management
                        byte_stream)
 target_link_libraries (DNFC
                        thread_pool

@@ -62,6 +62,7 @@
 struct hash_table
 {
    struct linked_list*** index;
+   struct hazard_pointer* hp;
    uint32_t size;
    uint32_t nb_elements;
    uint32_t (*hash)(key_type);
@@ -97,7 +98,7 @@ struct hash_table
 *
 * NOTES :      NONE
 *******************************************************************/
-struct hash_table* new_hash_table(uint32_t hash_type);
+struct hash_table* new_hash_table(uint32_t hash_type, uint32_t nb_threads);
 
 
 

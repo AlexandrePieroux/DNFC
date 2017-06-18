@@ -119,9 +119,6 @@ uint32_t *get_random_numbers(uint32_t min, uint32_t max)
 
 void init(arguments_t*** args)
 {
-   // Init phase
-   hash_table_init();
-   
    // Get random unique flows
    uint32_t* protocols = get_random_numbers(0, 255);
    uint32_t* source_address = get_random_numbers(0, NB_NUMBERS);
@@ -175,7 +172,7 @@ void init(arguments_t*** args)
    // Preparing the structure
    *args = new arguments_t*[NB_THREADS];
    hash_table** table = new hash_table*;
-   *table = new_hash_table(FNV_1);
+   *table = new_hash_table(FNV_1, NB_THREADS);
    
    // We distribute the work per threads
    uint32_t divider = NB_NUMBERS / NB_THREADS;

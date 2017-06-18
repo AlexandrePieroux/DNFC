@@ -10,12 +10,10 @@
 
 struct hazard_pointer{
    void** hp;
+   void** dlist;
    size_t size;
    size_t nb_threads;
    size_t subscribed_threads;
-   pthread_key_t* dcount_k;
-   pthread_key_t* dlist_k;
-   pthread_key_t* id_k;
    void (*free_node)(void*);
 };
 
@@ -24,5 +22,7 @@ struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (
 void** hp_get(struct hazard_pointer* hp, uint32_t index);
 
 void hp_delete_node(struct hazard_pointer* hp, void* node);
+
+void free_hp(struct hazard_pointer* hp);
 
 #endif

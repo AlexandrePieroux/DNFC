@@ -27,6 +27,11 @@ struct linked_list
 
 
 
+struct hazard_pointer* linked_list_init(
+  uint32_t nb_threads);
+
+
+
 struct linked_list* new_linked_list(
   key_type key,
   hash_type hash,
@@ -59,11 +64,5 @@ bool linked_list_delete(
 
 void linked_list_free(
   struct linked_list** list);
-
-
-
-void delete_node(
-  struct linked_list* node);
-
 
 #endif

@@ -7,13 +7,13 @@
 /*                Private function                     */
 
 // Retreive a thread context variable denoted by 'dcount'.
-uint32_t* get_dcount(pthread_key_t dcount_k);
+uint32_t* get_dcount(void);
 
 // Retreive a thread context variable denoted by 'id'.
 uint32_t* get_id(struct hazard_pointer* hp);
 
 // Retreive a thread context variable denoted by 'dlist'.
-void** get_dlist(pthread_key_t dlist_k, size_t size);
+void** get_dlist(struct hazard_pointer* dlist, size_t size);
 
 uint32_t hp_subscribe(struct hazard_pointer* hp);
 
@@ -26,7 +26,16 @@ int cmpfunc (const void* a, const void* b);
 // Binary search
 int binary_search(void** arr, int l, int r, int x);
 
+// Create pthread keys
+void smr_make_keys(void);
+
 /*                Private function                     */
+
+
+
+static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+static pthread_key_t id_k;
+static pthread_key_t dcount_k;
 
 
 
@@ -35,27 +44,16 @@ struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (
    // Allocate the structure and the basic data
    struct hazard_pointer* result = chkmalloc(sizeof(*result));
    result->hp = chkmalloc(sizeof(*result->hp) * nb_threads * size);
+   result->dlist = chkcalloc(nb_threads, sizeof(*result->dlist));
    result->nb_threads = nb_threads;
    result->size = size;
    result->subscribed_threads = 0;
    result->free_node = free_node;
    
-   // Init pthread private variables
-   pthread_key_t* dcount_k = chkmalloc(sizeof(*dcount_k));
-   pthread_key_t* dlist_k = chkmalloc(sizeof(*dlist_k));
-   pthread_key_t* id_k = chkmalloc(sizeof(*id_k));
-   
-   pthread_key_create(dcount_k, NULL);
-   pthread_key_create(dlist_k, NULL);
-   pthread_key_create(id_k, NULL);
-   
-   // Set pointer in the structure
-   result->dcount_k = dcount_k;
-   result->dlist_k = dlist_k;
-   result->id_k = id_k;
-
+   pthread_once(&key_once, smr_make_keys);
    return result;
 }
+
 
 
 void** hp_get(struct hazard_pointer* hp, uint32_t index)
@@ -67,11 +65,12 @@ void** hp_get(struct hazard_pointer* hp, uint32_t index)
 }
 
 
+
 void hp_delete_node(struct hazard_pointer* hp, void* node)
 {
    size_t batch_size = hp->nb_threads * hp->size * 2;
-   void** dlist = get_dlist(*hp->dlist_k, batch_size);
-   uint32_t* dcount = get_dcount(*hp->dcount_k);
+   void** dlist = get_dlist(hp, batch_size);
+   uint32_t* dcount = get_dcount();
    dlist[*dcount] = node;
    (*dcount)++;
    if(*dcount == batch_size)
@@ -80,9 +79,21 @@ void hp_delete_node(struct hazard_pointer* hp, void* node)
 
 
 
+// Be sure that the nodes contained in the pointers are all freed
+void free_hp(struct hazard_pointer* hp)
+{
+   free(hp->hp);
+   free(hp->dlist);
+   uint32_t error = pthread_key_delete(dcount_k);
+   error = pthread_key_delete(id_k);
+   free(hp);
+}
+
+
+
 /*                Private function                     */
 
-uint32_t* get_dcount(pthread_key_t dcount_k)
+uint32_t* get_dcount(void)
 {
    void* dcount = pthread_getspecific(dcount_k);
    if(!dcount)
@@ -95,25 +106,26 @@ uint32_t* get_dcount(pthread_key_t dcount_k)
 
 uint32_t* get_id(struct hazard_pointer* hp)
 {
-   void* id = pthread_getspecific(*hp->id_k);
+   void* id = pthread_getspecific(id_k);
    if(!id)
    {
       id = chkcalloc(1, sizeof *id);
-      pthread_setspecific(*hp->id_k, id);
+      pthread_setspecific(id_k, id);
       *(uint32_t*)id = hp_subscribe(hp);
    }
    return (uint32_t*) id;
 }
 
-void** get_dlist(pthread_key_t dlist_k, size_t size)
+void** get_dlist(struct hazard_pointer* hp, size_t size)
 {
-   void** dlist = pthread_getspecific(dlist_k);
+   uint32_t* id = get_id(hp);
+   void** dlist = hp->dlist[*id];
    if(!dlist)
    {
-      dlist = chkcalloc(size, sizeof *dlist);
-      pthread_setspecific(dlist_k, dlist);
+      void** dlist_p = chkcalloc(size, sizeof *dlist_p);
+      hp->dlist[*id] = dlist_p;
    }
-   return dlist;
+   return hp->dlist[*id];
 }
 
 uint32_t hp_subscribe(struct hazard_pointer* hp)
@@ -142,8 +154,8 @@ void hp_scan(struct hazard_pointer* hp)
    void** plist = chkcalloc(nb_pointers, sizeof(*plist));
    void** new_dlist = chkmalloc(sizeof(*new_dlist) * batch_size);
    
-   void** dlist = get_dlist(*hp->dlist_k, batch_size);
-   uint32_t* dcount = get_dcount(*hp->dcount_k);
+   void** dlist = get_dlist(hp, batch_size);
+   uint32_t* dcount = get_dcount();
    
    // Stage 1
    for(uint32_t i = 0; i < nb_pointers; ++i)
@@ -200,6 +212,12 @@ int binary_search(void** arr, int l, int r, int x)
    
    // Not found
    return NULL;
+}
+
+void smr_make_keys(void)
+{
+   pthread_key_create(&id_k, NULL);
+   pthread_key_create(&dcount_k, NULL);
 }
 
 /*                Private function                     */

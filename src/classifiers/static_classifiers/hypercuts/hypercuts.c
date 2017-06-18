@@ -224,7 +224,6 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule ***
         return NULL;
 
     // Create and init the classifier
-    hash_table_init();
     struct hypercuts_classifier *classifier = chkmalloc(sizeof(*classifier));
     struct hypercuts_node ***leaves = chkcalloc(1, sizeof(struct hypercuts_node ***));
     struct hypercuts_dimension **dimensions;
@@ -755,7 +754,7 @@ uint32_t get_dimensions(
     uint32_t counters[nb_dimensions];
     for (uint32_t i = 0; i < nb_dimensions; ++i)
     {
-        tables[i] = new_hash_table(FNV_1);
+        tables[i] = new_hash_table(FNV_1, 1);
         counters[i] = 0;
     }
 

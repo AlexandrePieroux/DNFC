@@ -4,9 +4,13 @@
 #define atomic_load_list(p) ({struct linked_list* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
 #define store_barrier __builtin_ia32_sfence
 
+#define NB_HP         3
 #define prev_hp_index 0
 #define cur_hp_index  1
 #define next_hp_index 2
+
+
+
 
 /*                                     Private function                                               */
 
@@ -35,7 +39,12 @@ void delete_node(struct linked_list* node);
 // Create the key of private variable per thread.
 void make_keys(void);
 
+// Delete node function
+void delete_node(struct linked_list* node);
+
 /*                                     Private function                                               */
+
+
 
 /*                                     Private per thread variables                                           */
 
@@ -47,9 +56,11 @@ static pthread_key_t prev;
 
 
 
-void linked_list_init(void)
+struct hazard_pointer* linked_list_init(uint32_t nb_threads)
 {
+   struct hazard_pointer* res = new_hazard_pointer(NB_HP, nb_threads, delete_node);
    pthread_once(&key_once, make_keys);
+   return res;
 }
 
 
@@ -59,7 +70,7 @@ struct linked_list* new_linked_list(
   hash_type hash,
   data_type data)
 {
-   struct linked_list* list = NULL;
+   struct linked_list* list = chkmalloc(sizeof *list);
    list->next = NULL;
    list->key = key;
    list->hash = hash;
@@ -206,11 +217,6 @@ void linked_list_free(struct linked_list** list)
 
 
 
-void delete_node(struct linked_list* node)
-{
-   free(node);
-}
-
 /*                                     Private function                                               */
 
 bool linked_list_find(
@@ -232,19 +238,19 @@ bool linked_list_find(
    
    for(;;)
    {
-      *prev_p = atomic_load_list(list);
+      *prev_p = *list;
       *cur_p = get_list_pointer(atomic_load_list(&(*prev_p)->next));
       
       *cur_hp = *cur_p;
-      if(atomic_load_list(&(*prev_p)->next) != *cur_p)
-         break;
+      if((*prev_p)->next != *cur_p)
+         continue;
       
       for(;;)
       {
-         if(!cur_p)
+         if(!(*cur_p))
             return NULL;
          
-         next_p = atomic_load_list(&(*cur_p)->next);
+         next_p = (*cur_p)->next;
          
          *next_hp = next_p;
          if(atomic_load_list(&(*cur_p)->next) != next_p)
@@ -261,7 +267,7 @@ bool linked_list_find(
             bool eq = byte_stream_eq(ckey, key);
             if(chash > hash || (eq && chash == hash))
                return eq;
-            prev_p = cur_p;
+            *prev_p = *cur_p;
             *prev_hp = *cur_p;
          } else {
             if(atomic_compare_and_swap(&(*prev_p)->next, *cur_p, get_list_pointer(next_p)))
@@ -316,6 +322,13 @@ void make_keys()
 {
    pthread_key_create(&cur, NULL);
    pthread_key_create(&prev, NULL);
+}
+
+
+
+void delete_node(struct linked_list* node)
+{
+   free(node);
 }
 
 /*                                     Private function                                               */
