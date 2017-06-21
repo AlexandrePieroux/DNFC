@@ -1,12 +1,15 @@
 #include "DNFC.h"
 
 
-// Private function
+/*          Private Functions              */
+
 struct pair* new_queue_n_table_pair(size_t nb_threads, size_t queue_limit);
 
 struct tag* new_tag(u_char* header header, size_t header_length);
 
-bool check_last_packet_flow(u_char* header, size_t header_length);
+bool is_last_packet_of_flow(u_char* header, size_t header_length);
+
+/*          Private Functions              */
 
 
 
@@ -48,7 +51,7 @@ void DNFC_process(struct DNFC* classifier, u_char* header, size_t header_length)
    }
    
    // We check that if the packet is the last of the flow - if yes, we remove it
-   if(check_last_packet_flow(header, header_length))
+   if(is_last_packet_of_flow(header, header_length))
       remove_flow(flow_table, header, header_length);
    
    // TODO
@@ -70,18 +73,23 @@ void free_DNFC(struct DNFC* classifier)
 
 
 
-// Private function
+/*          Private Functions              */
+
 struct pair* new_queue_n_table_pair(size_t nb_threads, size_t queue_limit)
 {
    return NULL; // TODO
 }
+
 
 struct tag* new_tag(u_char* header header, size_t header_length)
 {
    return NULL; // TODO
 }
 
-bool check_last_packet_flow(u_char* header, size_t header_length)
+
+bool is_last_packet_of_flow(u_char* header, size_t header_length)
 {
    return false; // TODO
 }
+
+/*          Private Functions              */
