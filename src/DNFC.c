@@ -1,106 +1,87 @@
-#include <stdio.h>
-#include "ABS_DNFC.h"
-#include "lib/classifiers/naive/naive_classifier.h"
+#include "DNFC.h"
 
 
-int main(int argc, char **argv)
+// Private function
+struct pair* new_queue_n_table_pair(size_t nb_threads, size_t queue_limit);
+
+struct tag* new_tag(u_char* header header, size_t header_length);
+
+bool check_last_packet_flow(u_char* header, size_t header_length);
+
+
+
+struct DNFC* new_DNFC(size_t nb_threads, struct classifier_rule ***rules, size_t nb_rules, size_t queue_limit, bool verbose)
 {
-   struct DNFC_conf *classifier_conf = NULL;
-   char *iface = NULL;
-   int port;
-   int options;
-
-   /* Getting the parameters */
-   while((options = getopt(argc, argv, "i:p:")) != -1)
-   {
-      switch(options)
-      {
-         case 'i':
-            iface = optarg;
-            break;
-         case 'p':
-            port = atoi(optarg);
-            break;
-         default:
-            D("Bad usage");
-            return(1);
-      }
-   }
-
-   /*Open the netmap interface*/
-   struct DNFC *classifier = new_pc();
-
-   if(classifier->init(classifier_conf, iface, port) > 0)
-   {
-      D("Opened");
-      classifier->process(classifier_conf);
-      //classifier->close(classifier_conf);
-      D("Closed");
-   }
-   return(0);
+   // Allocate the structure and create a queue and a flow table for each rules
+   struct DNFC* result = chkmalloc(sizeof(*result));
+   for (uint32_t i = 0; i < nb_rules; ++i)
+      (*rules)[i]->action = new_queue_n_table_pair(nb_threads, queue_limit);
+   
+   // Create the hypercut tree structure for static classification
+   result->static_classifier = new_hypercuts_classifier(rules, nb_rules, verbose);
+   return result;
 }
 
 
 
-int DNFC_init(struct DNFC_conf *output, char *iface, int port)
+void DNFC_process(struct DNFC* classifier, u_char* header, size_t header_length)
 {
-   struct nm_desc *piface = NULL;
-
-   /* [1][2] */
-   piface = nm_open(iface, NULL, 0, 0);
-   if(piface == NULL)
+   // Search for a match in the static classifier
+   struct pair* queue_n_table = (struct pair*) hypercuts_search(classifier->static_classifier, header, header_length);
+   
+   // TODO
+   if(!queue_n_table)
+      return; //Can put to regular stack - for now this should drop the packet instead of returning
+   
+   // Get the queue and the dynamic classifier for the matched rule
+   struct hash_table* flow_table = queue_n_table->a;
+   struct queue* flow_queue = queue_n_table->b;
+   
+   // Search for a match in the dynamic classifier
+   struct tag* tag = (struct tag*) get_flow(flow_table, header, header_length);
+   
+   // If no match, we create a fresh, unique tag
+   if(!tag)
    {
-      return(ERROR_IFACE);
-   } else {
-      /* File descriptor creation */
-      struct pollfd *fds = chkmalloc(sizeof *fds);
-      fds->fd = NETMAP_FD(piface);
-      fds->events = POLLIN;
-
-      output = chkmalloc(sizeof *output);
-      output->desc = chkmalloc(sizeof output->desc);
-      output->ds_map = chkmalloc(sizeof output->ds_map);
-      output->iface = chkmalloc(sizeof *iface);
-      output->fds = chkmalloc(sizeof *fds);
-
-      output->desc = piface;
-      output->iface = iface;
-      output->fds = fds;
-      output->port = port;
-      output->state = RUNNING;
-      output->msgq_id = msgget(PROCESS_MAIL_BOX, 0600 | IPC_CREAT);
-      return(OPEN);
+      tag = new_tag(header, header_length);
+      put_flow(flow_table, header, header_length, tag);
    }
+   
+   // We check that if the packet is the last of the flow - if yes, we remove it
+   if(check_last_packet_flow(header, header_length))
+      remove_flow(flow_table, header, header_length);
+   
+   // TODO
+   // We build a pair with the tag and the packet header
+   struct pair* packet_result = chkmalloc(sizeof(*packet_result));
+   pair->a = tag;
+   pair->b = header;// -> maybe put the packet inside too
+   
+   // We push the pair in the queue of the static rule
+   queue_push(flow_queue, packet_result);
 }
 
 
 
-int DNFC_close(struct DNFC_conf *conf)
+void free_DNFC(struct DNFC* classifier)
 {
-   if(conf)
-   {
-      /*[1]*/
-      nm_close(conf->desc);
-      /*[2]*/
-      if(conf->desc)
-      {
-         free(conf->desc);
-      }
-      if (conf->ds_map)
-      {
-         munmap(conf->ds_map, conf->ds_size);
-         free(conf->ds_map);
-      }
-      if (conf->iface)
-      {
-         free(conf->iface);
-      }
-      if (conf->fds)
-      {
-         free(conf->fds);
-      }
-      free(conf);
-      return(CLOSE);
-   }
-   return(ERROR_FREE);
+   return; // TODO
+}
+
+
+
+// Private function
+struct pair* new_queue_n_table_pair(size_t nb_threads, size_t queue_limit)
+{
+   return NULL; // TODO
+}
+
+struct tag* new_tag(u_char* header header, size_t header_length)
+{
+   return NULL; // TODO
+}
+
+bool check_last_packet_flow(u_char* header, size_t header_length)
+{
+   return false; // TODO
 }
