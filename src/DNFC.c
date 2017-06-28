@@ -49,6 +49,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
                       struct classifier_rule ***rules,
                       size_t nb_rules,
                       size_t queue_limit,
+                      void (*callback)(u_char*, size_t),
                       bool verbose)
 {
    // Allocate the structure
@@ -59,7 +60,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
    // Create the hypercut tree structure for static classification
    result->static_classifier = new_hypercuts_classifier(rules, nb_rules, verbose);
    result->nb_thread = nb_threads;
-   
+   result->callback = callback;
    return result;
 }
 
@@ -67,19 +68,24 @@ struct DNFC* new_DNFC(size_t nb_threads,
 
 void DNFC_process(struct DNFC* classifier, u_char* pckt, size_t pckt_length)
 {
-   // We do a little of packet parsing
+   // Packet parsing
    struct DNFC_pckt* DNFC_pckt = get_DNFC_pckt(pckt, pckt_length);
    size_t header_length = DNFC_pckt->header_lenght;
    
-   // We check first that the protocol is supported
+   // Check that the protocol is supported
    if(!is_supported(DNFC_pckt))
-      return; // TODO see what we can do with a callback function
+   {
+      classifier->callback(pckt, pckt_length);
+      return;
+   }
 
    // Search for a match in the static classifier
    struct tuple* queue_n_table;
-   
    if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&queue_n_table))
-      return; //Can put to regular stack - for now this should drop the packet instead of returning
+   {
+      classifier->callback(pckt, pckt_length);
+      return;
+   }
    
    if(!queue_n_table->a || !queue_n_table->b)
       init_queue_n_table_pair(queue_n_table, classifier->nb_thread, classifier->queue_limit);

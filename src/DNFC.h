@@ -14,6 +14,7 @@ typedef unsigned char u_char; // Defining u_char type for convenient display
 struct DNFC
 {
    struct hypercuts_classifier* static_classifier;
+   void (*callback)(u_char*, size_t);
    size_t queue_limit;
    size_t nb_thread;
 };
@@ -23,6 +24,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
                       struct classifier_rule ***rules,
                       size_t nb_rules,
                       size_t queue_limit,
+                      void (*callback)(u_char*, size_t),
                       bool verbose);
 
 void DNFC_process(struct DNFC* classifier, u_char* pckt, size_t pckt_length);
