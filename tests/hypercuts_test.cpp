@@ -27,8 +27,8 @@ TEST(Hypecuts, RandomRules)
     for (uint32_t i = 0; i < nb_rules; ++i){
         u_char *h = get_header(*rules[i]);
         uint32_t result = NULL;
-        void* r = hypercuts_search(classifier, h, HEADER_LENGTH);
-        if(r)
+        void* r = NULL;
+        if(hypercuts_search(classifier, h, HEADER_LENGTH, &r))
             result = *(uint32_t *)r;
         EXPECT_EQ(result, rules[i]->id);
         free(h);

@@ -175,10 +175,11 @@ struct hypercuts_node *get_leaf(
     uint32_t *header_values);
 
 // Linear search amongst rules in a leaf node
-void *linear_search(
+bool linear_search(
     struct hypercuts_node *leaf,
     uint32_t *header_values,
-    uint32_t nb_dimensions);
+    uint32_t nb_dimensions,
+    void** out);
 
 // Retrieve a node based on its indexes
 struct hypercuts_node *get_children(
@@ -253,7 +254,7 @@ struct hypercuts_classifier *new_hypercuts_classifier(struct classifier_rule ***
     return classifier;
 }
 
-void *hypercuts_search(struct hypercuts_classifier *classifier, u_char *header, size_t header_length)
+bool hypercuts_search(struct hypercuts_classifier *classifier, u_char *header, size_t header_length, void** out)
 {
     uint32_t header_values[classifier->nb_dimensions];
     struct classifier_field **fields = classifier->fields_set;
@@ -267,7 +268,7 @@ void *hypercuts_search(struct hypercuts_classifier *classifier, u_char *header, 
     struct hypercuts_node *leaf = get_leaf(classifier->root, header_values);
     if (!leaf)
         return NULL;
-    return linear_search(leaf, header_values, classifier->nb_dimensions);
+    return linear_search(leaf, header_values, classifier->nb_dimensions, out);
 }
 
 void hypercuts_print(struct hypercuts_classifier *classifier)
@@ -1235,10 +1236,11 @@ struct hypercuts_node *get_leaf(
     return node;
 }
 
-void *linear_search(
+bool linear_search(
     struct hypercuts_node *leaf,
     uint32_t *header_values,
-    uint32_t nb_dimensions)
+    uint32_t nb_dimensions,
+    void** out)
 {
     if (!leaf->rules)
         return NULL;
@@ -1261,13 +1263,16 @@ void *linear_search(
 
         // If it matched return action pointer
         if (match)
-            return current_rule->action;
+        {
+            *out = current_rule->action;
+            return true;
+        }
 
         // Next rule
         i++;
         current_rule = leaf->rules[i];
     }
-    return NULL;
+    return false;
 }
 
 struct hypercuts_node *get_children(

@@ -23,7 +23,7 @@ struct classifier_rule
    uint32_t id;
    struct classifier_field **fields;
    uint32_t nb_fields;
-   void *action;
+   void* action;
 };
 
 #endif

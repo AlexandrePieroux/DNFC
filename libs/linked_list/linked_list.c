@@ -58,7 +58,7 @@ static pthread_key_t prev;
 
 struct hazard_pointer* linked_list_init(uint32_t nb_threads)
 {
-   struct hazard_pointer* res = new_hazard_pointer(NB_HP, nb_threads, delete_node);
+   struct hazard_pointer* res = new_hazard_pointer(NB_HP, nb_threads, (void(*)(void*))delete_node);
    pthread_once(&key_once, make_keys);
    return res;
 }
