@@ -10,6 +10,11 @@
 
 typedef unsigned char u_char; // Defining u_char type for convenient display
 
+struct tuple
+{
+   void* a;
+   void* b;
+};
 
 struct DNFC
 {
