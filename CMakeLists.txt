@@ -42,17 +42,6 @@ set (CLASSIFIERS_RULES
 		 src/classifiers/classifier_rule/classifier_rule.h
 		 src/classifiers/classifier_rule/classifier_field.h)
 
-# dynamic classifiers
-set (FLOW_TABLE
-		 src/classifiers/dynamic_classifiers/flow_table/flow_table.c
-		 src/classifiers/dynamic_classifiers/flow_table/flow_table.h)
-
-set (DYNAMIC_CLASSIFIERS
-		 src/classifiers/dynamic_classifiers/dynamic_classifiers.h
-		 ${CLASSIFIERS_RULES}
-		 ${FLOW_TABLE})
-
-
 # static classifiers
 set (HYPERCUTS
 		 src/classifiers/static_classifiers/hypercuts/hypercuts.c
@@ -85,7 +74,6 @@ add_library (linked_list ${LINKED_LIST})
 add_library (hash_table ${HASH_TABLE})
 add_library (queue ${QUEUE})
 add_library (thread_pool ${THREAD_POOL})
-add_library (dynamic_classifiers ${DYNAMIC_CLASSIFIERS})
 add_library (static_classifiers ${STATIC_CLASSIFIERS})
 add_library (protocols ${PROTOCOLS})
 
@@ -105,9 +93,6 @@ target_link_libraries (hash_table
                        byte_stream)
 target_link_libraries (thread_pool
                        memory_management)
-target_link_libraries (dynamic_classifiers 
-						     hash_table
-                       byte_stream)
 target_link_libraries (queue
                        SMR)
 target_link_libraries (static_classifiers 
@@ -115,7 +100,6 @@ target_link_libraries (static_classifiers
                        byte_stream)
 target_link_libraries (DNFC
                        thread_pool
-                       dynamic_classifiers
                        static_classifiers
                        queue
                        protocols)
@@ -181,11 +165,6 @@ target_link_libraries (hypercuts_test
                         static_classifiers
                         byte_stream
                         gtest gtest_main)
-target_link_libraries (flow_table_test
-                        dynamic_classifiers
-                        byte_stream
-                        thread_pool
-                        gtest gtest_main)
 target_link_libraries (queue_test
                         queue
                         thread_pool
@@ -200,6 +179,5 @@ target_link_libraries (DNFC_test
 add_test(NAME linked_list_test COMMAND linked_list_test)
 add_test(NAME hash_table_test COMMAND hash_table_test)
 add_test(NAME hypercuts_test COMMAND hypercuts_test)
-add_test(NAME flow_table_test COMMAND flow_table_test)
 add_test(NAME queue_test COMMAND queue_test)
 add_test(NAME DNFC_test COMMAND DNFC_test)
