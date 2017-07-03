@@ -1,8 +1,8 @@
 #ifndef _DNFC_TCPH_
 #define _DNFC_TCPH_
 
-#include <time.h>
-#include "../../classifiers/dynamic_classifiers/dynamic_classifiers.h"
+#include <stdlib.h>
+#include "../../../libs/byte_stream/byte_stream.h"
 
 #define TCP 6
 

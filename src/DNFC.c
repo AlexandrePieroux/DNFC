@@ -7,6 +7,7 @@
 #define new_tag chkmalloc(sizeof(tag))
 
 /* IPV4 fields macro */
+
 #define IPV4_PROTOCOL                     4
 #define MIN_HEADER_LENGTH                 120
 
@@ -70,7 +71,7 @@ void DNFC_process(struct DNFC* classifier,
    }
 
    // Search for a match in the static classifier
-   struct queue* flow_queue;
+   struct queue* flow_queue = NULL;
    if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&flow_queue))
    {
       classifier->callback(pckt, pckt_length);

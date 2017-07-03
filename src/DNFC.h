@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "classifiers/dynamic_classifiers/dynamic_classifiers.h"
 #include "classifiers/static_classifiers/static_classifiers.h"
 #include "../libs/queue/queue.h"
 

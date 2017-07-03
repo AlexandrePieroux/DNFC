@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 2.8.2)
 project (DNFC)
 
+
 # Libraries
 set (MEMORY_MANAGEMENT
 		 libs/memory_management/memory_management.c
@@ -42,7 +43,8 @@ set (CLASSIFIERS_RULES
 		 src/classifiers/classifier_rule/classifier_rule.h
 		 src/classifiers/classifier_rule/classifier_field.h)
 
-# static classifiers
+
+# Static classifiers
 set (HYPERCUTS
 		 src/classifiers/static_classifiers/hypercuts/hypercuts.c
 		 src/classifiers/static_classifiers/hypercuts/hypercuts.h)
@@ -52,12 +54,14 @@ set (STATIC_CLASSIFIERS
 		 ${CLASSIFIERS_RULES}
 		 ${HYPERCUTS})
 
-# main structure
+
+# Main structure
 set (DNFC
 		 src/DNFC.c
 	 	 src/DNFC.h)
 
-# supported protocols
+
+# Supported protocols
 set (TCP
       src/protocols/TCP/TCP.c
       src/protocols/TCP/TCP.h)
@@ -66,7 +70,8 @@ set (PROTOCOLS
       src/protocols/protocol.h
       ${TCP})
 
-# add the Libraries
+
+# Add the Libraries
 add_library (memory_management ${MEMORY_MANAGEMENT})
 add_library (SMR ${HAZARD_POINTER})
 add_library (byte_stream ${BYTE_STREAM})
@@ -76,13 +81,10 @@ add_library (queue ${QUEUE})
 add_library (thread_pool ${THREAD_POOL})
 add_library (static_classifiers ${STATIC_CLASSIFIERS})
 add_library (protocols ${PROTOCOLS})
+add_library (DNFC ${DNFC})
 
 
-# add the executable
-add_executable (DNFC ${DNFC})
-
-
-# link Libraries
+# Link libraries dependencies
 target_link_libraries (SMR
                        memory_management)
 target_link_libraries (linked_list
@@ -104,7 +106,7 @@ target_link_libraries (DNFC
                        queue
                        protocols)
 
-# Tests
+# Google Tests
 # Download and unpack googletest at configure time
 configure_file (CMakeLists.txt.in googletest-download/CMakeLists.txt)
 execute_process (COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
@@ -137,20 +139,32 @@ if (CMAKE_VERSION VERSION_LESS 2.8.11)
 endif ()
 
 
+# Tests variables files
 set (LINKED_LIST_TEST tests/linked_list_test.cpp)
 set (HASH_TABLE_TEST tests/hash_table_test.cpp)
 set (HYPERCUTS_TEST tests/hypercuts_test.cpp)
-set (FLOW_TABLE_TEST tests/flow_table_test.cpp)
 set (QUEUE_TEST tests/queue_test.cpp)
 set (DNFC_TEST tests/DNFC_test.cpp)
 
+
+# Examples
+set (DPI_example
+      examples/DPI/deep_packet_inspection.c)
+
+
+# Executables tests
 add_executable (linked_list_test ${LINKED_LIST_TEST})
 add_executable (hash_table_test ${HASH_TABLE_TEST})
 add_executable (hypercuts_test ${HYPERCUTS_TEST})
-add_executable (flow_table_test ${FLOW_TABLE_TEST})
 add_executable (queue_test ${QUEUE_TEST})
 add_executable (DNFC_test ${DNFC_TEST})
 
+
+# Executables examples
+add_executable (DPI ${DPI_example})
+
+
+# Link tests dependencies
 target_link_libraries (linked_list_test
                         linked_list
                         byte_stream
@@ -172,10 +186,16 @@ target_link_libraries (queue_test
 target_link_libraries (DNFC_test
 								hash_table
 								thread_pool
-								dynamic_classifiers
 								static_classifiers
 								gtest gtest_main)
 
+
+# Link examples dependencies
+target_link_libraries (DPI
+                        DNFC
+                        hash_table)
+
+# Tests commands
 add_test(NAME linked_list_test COMMAND linked_list_test)
 add_test(NAME hash_table_test COMMAND hash_table_test)
 add_test(NAME hypercuts_test COMMAND hypercuts_test)

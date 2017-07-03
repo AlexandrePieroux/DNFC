@@ -1,5 +1,10 @@
 #include "TCP.h"
 
+typedef struct byte_stream* key_type;
+#define TCP_HEADER_LENGTH     160
+
+#define TCP_DATA_OFFSET(pckt, hdr_s) pckt[hdr_s + 12] & 240
+
 /*  Private function  */
 
 key_type get_key(u_char *header, size_t header_size);
@@ -8,10 +13,13 @@ key_type get_key(u_char *header, size_t header_size);
 
 /*  Public function  */
 
-void* DNFC_TCP_new_tag(u_char* pckt,
+void* DNFC_TCP_get_tag(u_char* pckt,
                        size_t header_size)
 {
-   key_type key = get_key(pckt, header_size);
+   if((TCP_DATA_OFFSET(pckt, header_size/8)) < TCP_HEADER_LENGTH)
+      return NULL;
+   
+   key_type key = get_key(pckt, header_size/8);
    return key;
 }
 
