@@ -5,6 +5,7 @@
 #define store_barrier __builtin_ia32_sfence
 
 #define NB_HP         3
+
 #define prev_hp_index 0
 #define cur_hp_index  1
 #define next_hp_index 2
@@ -38,9 +39,6 @@ void delete_node(struct linked_list* node);
 
 // Create the key of private variable per thread.
 void make_keys(void);
-
-// Delete node function
-void delete_node(struct linked_list* node);
 
 /*                                     Private function                                               */
 

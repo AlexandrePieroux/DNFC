@@ -68,6 +68,14 @@ set (DNFC
 		 src/DNFC.c
 	 	 src/DNFC.h)
 
+# supported protocols
+set (TCP
+      src/protocols/TCP/TCP.c
+      src/protocols/TCP/TCP.h)
+
+set (PROTOCOLS
+      src/protocols/protocol.h
+      ${TCP})
 
 # add the Libraries
 add_library (memory_management ${MEMORY_MANAGEMENT})
@@ -79,6 +87,7 @@ add_library (queue ${QUEUE})
 add_library (thread_pool ${THREAD_POOL})
 add_library (dynamic_classifiers ${DYNAMIC_CLASSIFIERS})
 add_library (static_classifiers ${STATIC_CLASSIFIERS})
+add_library (protocols ${PROTOCOLS})
 
 
 # add the executable
@@ -108,7 +117,8 @@ target_link_libraries (DNFC
                        thread_pool
                        dynamic_classifiers
                        static_classifiers
-                       queue)
+                       queue
+                       protocols)
 
 # Tests
 # Download and unpack googletest at configure time

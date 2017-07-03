@@ -3,19 +3,16 @@
 
 /*          Private Functions              */
 
-#define tag uint32_t
+#define tag void
 #define new_tag chkmalloc(sizeof(tag))
 
+/* IPV4 fields macro */
 #define IPV4_PROTOCOL                     4
 #define MIN_HEADER_LENGTH                 120
 
 #define GET_VERSION(pckt)          (pckt[0] & 240)
 #define GET_IHL(pckt)              (pckt[0] & 15)
 #define GET_PROTOCOL(pckt)          pckt[9]
-
-#define TCP                               6
-#define TCP_FIN(pckt)              (pckt[13] & 1)
-#define TCP_ACK(pckt)              (pckt[13] & 16)
 
 #define GET_HEADER_LENGTH(pckt)    (GET_IHL(pckt) * 32)
 
@@ -27,14 +24,13 @@ bool is_supported(u_char* pckt,
                   size_t pckt_size,
                   size_t header_size);
 
-void init_queue_n_table_pair(struct tuple* out,
-                             size_t nb_threads,
-                             size_t queue_limit);
+void init_queue(struct queue* queue,
+                size_t nb_threads,
+                size_t queue_limit);
 
 tag* get_flow_tag(u_char* pckt,
                   size_t size,
-                  size_t header_size,
-                  struct hash_table* flow_table);
+                  size_t header_size);
 
 /*          Private Functions              */
 
@@ -50,7 +46,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
    // Allocate the structure
    struct DNFC* result = chkmalloc(sizeof(*result));
    for (uint32_t i = 0; i < nb_rules; ++i)
-      (*rules)[i]->action = chkcalloc(1, sizeof(struct tuple*));
+      (*rules)[i]->action = chkcalloc(1, sizeof(struct queue*));
    
    // Create the hypercut tree structure for static classification
    result->static_classifier = new_hypercuts_classifier(rules, nb_rules, verbose);
@@ -74,22 +70,18 @@ void DNFC_process(struct DNFC* classifier,
    }
 
    // Search for a match in the static classifier
-   struct tuple* queue_n_table;
-   if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&queue_n_table))
+   struct queue* flow_queue;
+   if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&flow_queue))
    {
       classifier->callback(pckt, pckt_length);
       return;
    }
    
-   if(!queue_n_table->a || !queue_n_table->b)
-      init_queue_n_table_pair(queue_n_table, classifier->nb_thread, classifier->queue_limit);
-   
-   // Get the queue and the dynamic classifier for the matched rule
-   struct hash_table* flow_table = queue_n_table->a;
-   struct queue* flow_queue = queue_n_table->b;
+   if(!flow_queue)
+      flow_queue = new_queue(classifier->queue_limit, classifier->nb_thread);
    
    // Search for a match in the dynamic classifier
-   tag* flow_tag = get_flow_tag(pckt, pckt_length, header_length, flow_table);
+   tag* flow_tag = get_flow_tag(pckt, pckt_length, header_length);
    
    // We build a pair with the tag and the packet
    struct tuple* packet_result = chkmalloc(sizeof(*packet_result));
@@ -98,13 +90,6 @@ void DNFC_process(struct DNFC* classifier,
    
    // We push the pair in the queue of the static rule
    queue_push(flow_queue, packet_result);
-}
-
-
-
-void free_DNFC(struct DNFC* classifier)
-{
-   return; // TODO
 }
 
 
@@ -133,37 +118,14 @@ bool is_supported(u_char* pckt,
    }
 }
 
-void init_queue_n_table_pair(struct tuple* out,
-                             size_t nb_threads,
-                             size_t queue_limit)
-{
-   out->a = new_queue(queue_limit, nb_threads);
-   out->b = new_hash_table(FNV_1, nb_threads);
-}
-
 tag* get_flow_tag(u_char* pckt,
                   size_t size,
-                  size_t header_size,
-                  struct hash_table* flow_table)
+                  size_t header_size)
 {
-   tag* flow_tag;
    switch(GET_PROTOCOL(pckt))
    {
       case TCP:
-         flow_tag = get_flow(flow_table, pckt, header_size);
-         if(!flow_tag)
-         {
-            flow_tag = new_tag;
-            *flow_tag = TCP_FIN(pckt);
-            put_flow(flow_table, pckt, header_size, flow_tag);
-         }
-         
-         if((TCP_FIN(pckt) && TCP_ACK(pckt)) || (*flow_tag && TCP_ACK(pckt)))
-            remove_flow(flow_table, pckt, header_size);
-         else
-            *flow_tag = TCP_FIN(pckt);
-            
-         return flow_tag;
+         return DNFC_TCP_get_tag(pckt, header_size);
       default:
          return NULL;
    }

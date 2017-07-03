@@ -8,6 +8,10 @@
 #include "classifiers/static_classifiers/static_classifiers.h"
 #include "../libs/queue/queue.h"
 
+/* Supported protocols headers */
+
+#include "protocols/TCP/TCP.h"
+
 typedef unsigned char u_char; // Defining u_char type for convenient display
 
 struct tuple
@@ -34,6 +38,6 @@ struct DNFC* new_DNFC(size_t nb_threads,
 
 void DNFC_process(struct DNFC* classifier, u_char* pckt, size_t pckt_length);
 
-void free_DNFC(struct DNFC* classifier);
+//void free_DNFC(struct DNFC* classifier);
 
 #endif

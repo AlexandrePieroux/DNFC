@@ -209,7 +209,6 @@ int binary_search(void** arr, int l, int r, int x)
       // Else search right
       return binary_search(arr, mid + 1, r, x);
    }
-   
    // Not found
    return NULL;
 }
