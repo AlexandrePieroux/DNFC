@@ -29,9 +29,11 @@ void init_queue(struct queue* queue,
                 size_t nb_threads,
                 size_t queue_limit);
 
-tag* get_flow_tag(u_char* pckt,
+tag* get_flow_tag(struct DNFC* classifier,
+                  u_char* pckt,
                   size_t size,
-                  size_t header_size);
+                  size_t header_size,
+                  void* protocol_action);
 
 /*          Private Functions              */
 
@@ -47,7 +49,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
    // Allocate the structure
    struct DNFC* result = chkmalloc(sizeof(*result));
    for (uint32_t i = 0; i < nb_rules; ++i)
-      (*rules)[i]->action = chkcalloc(1, sizeof(struct queue*));
+      (*rules)[i]->action = NULL;
    
    // Create the hypercut tree structure for static classification
    result->static_classifier = new_hypercuts_classifier(rules, nb_rules, verbose);
@@ -71,18 +73,21 @@ void DNFC_process(struct DNFC* classifier,
    }
 
    // Search for a match in the static classifier
-   struct queue* flow_queue = NULL;
-   if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&flow_queue))
+   struct tuple* action = NULL;
+   if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&action))
    {
       classifier->callback(pckt, pckt_length);
       return;
    }
    
-   if(!flow_queue)
-      flow_queue = new_queue(classifier->queue_limit, classifier->nb_thread);
+   if(!action)
+   {
+      action = chkmalloc(sizeof(struct tuple*));
+      action->a = new_queue(classifier->queue_limit, classifier->nb_thread);
+   }
    
    // Search for a match in the dynamic classifier
-   tag* flow_tag = get_flow_tag(pckt, pckt_length, header_length);
+   tag* flow_tag = get_flow_tag(classifier, pckt, pckt_length, header_length, action->b);
    
    // We build a pair with the tag and the packet
    struct tuple* packet_result = chkmalloc(sizeof(*packet_result));
@@ -90,7 +95,7 @@ void DNFC_process(struct DNFC* classifier,
    packet_result->b = pckt;
    
    // We push the pair in the queue of the static rule
-   queue_push(flow_queue, packet_result);
+   queue_push(action->a, packet_result);
 }
 
 
@@ -119,14 +124,16 @@ bool is_supported(u_char* pckt,
    }
 }
 
-tag* get_flow_tag(u_char* pckt,
+tag* get_flow_tag(struct DNFC* classifier,
+                  u_char* pckt,
                   size_t size,
-                  size_t header_size)
+                  size_t header_size,
+                  void* protocol_action)
 {
    switch(GET_PROTOCOL(pckt))
    {
       case TCP:
-         return DNFC_TCP_get_tag(pckt, header_size);
+         return DNFC_TCP_get_tag(pckt, header_size, protocol_action, classifier->nb_thread);
       default:
          return NULL;
    }
