@@ -23,6 +23,8 @@ void* get_flow(struct hash_table* table,
 {
    // Get the information of the flow
    key_type key = get_key(pckt);
+   if(!key)
+      return NULL;
    void* result = hash_table_get(table, key);
    free_byte_stream(key);
    return result;
@@ -36,6 +38,8 @@ bool put_flow(struct hash_table* table,
 {
    // Get the information of the flow
    key_type key = get_key(pckt);
+   if(!key)
+      return NULL;
    if (!hash_table_put(table, key, tag))
    {
       free_byte_stream(key);
@@ -51,6 +55,8 @@ bool remove_flow(struct hash_table* table,
 {
    // Get the information of the flow
    key_type key = get_key(pckt);
+   if(!key)
+      return NULL;
    bool result = hash_table_remove(table, key);
    free_byte_stream(key);
    return result;
