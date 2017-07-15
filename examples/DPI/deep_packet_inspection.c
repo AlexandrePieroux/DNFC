@@ -11,7 +11,6 @@
 #define NB_THREADS   64
 #define QUEUE_THRESHOLD   4096
 
-
 struct args_classification_t
 {
    struct DNFC* classifier;
@@ -24,14 +23,32 @@ struct args_inspection_t
    struct queue* queue;
 };
 
-
-void* job_classify(void* args);
-
+struct queue* ifa_default_queue;
+struct queue* ifb_default_queue;
 
 int verbose = 0;
-
 static int do_abort = 0;
-static int zerocopy = 1; /* enable zerocopy if possible */
+
+
+
+/*       Private Function       */
+
+void* job_classify(void* args)
+{
+   struct args_classification_t* args_cast = (struct args_classification_t*) args;
+   DNFC_process(args_cast->classifier, args_cast->pckt, args_cast->pckt_length);
+   return NULL;
+}
+
+void put_default_ifa_queue(u_char* pckt, size_t pckt_lenght)
+{
+   queue_push(ifa_default_queue, pckt);
+}
+
+void put_default_ifb_queue(u_char* pckt, size_t pckt_lenght)
+{
+   queue_push(ifb_default_queue, pckt);
+}
 
 static void sigint_h(int sig)
 {
@@ -46,16 +63,15 @@ static void sigint_h(int sig)
  */
 int pkt_queued(struct nm_desc *d, int tx)
 {
-   u_int i, tot = 0;
+   uint32_t i;
+   uint32_t tot = 0;
    
-   if (tx) {
-      for (i = d->first_tx_ring; i <= d->last_tx_ring; i++) {
+   if(tx){
+      for (i = d->first_tx_ring; i <= d->last_tx_ring; i++)
          tot += nm_ring_space(NETMAP_TXRING(d->nifp, i));
-      }
    } else {
-      for (i = d->first_rx_ring; i <= d->last_rx_ring; i++) {
+      for (i = d->first_rx_ring; i <= d->last_rx_ring; i++)
          tot += nm_ring_space(NETMAP_RXRING(d->nifp, i));
-      }
    }
    return tot;
 }
@@ -63,17 +79,23 @@ int pkt_queued(struct nm_desc *d, int tx)
 /*
  * move up to 'limit' pkts from rxring to txring swapping buffers.
  */
-static int process_rings(struct netmap_ring *rxring, struct netmap_ring *txring,
-              u_int limit, const char *msg)
+static int process_rings(struct netmap_ring *rxring,
+                         struct netmap_ring *txring,
+                         uint32_t limit)
 {
-   u_int j, k, m = 0;
+   uint32_t j;
+   uint32_t k;
+   uint32_t m = 0;
    
    /* print a warning if any of the ring flags is set (e.g. NM_REINIT) */
    if (rxring->flags || txring->flags)
-      D("%s rxflags %x txflags %x",
-        msg, rxring->flags, txring->flags);
+      D("rxflags %x txflags %x", rxring->flags, txring->flags);
+   
+   // Setting cursors to the current positions of the rings
    j = rxring->cur; /* RX */
    k = txring->cur; /* TX */
+   
+   // Take the smaller ring space (to avoid overflow)
    m = nm_ring_space(rxring);
    if (m < limit)
       limit = m;
@@ -81,59 +103,53 @@ static int process_rings(struct netmap_ring *rxring, struct netmap_ring *txring,
    if (m < limit)
       limit = m;
    m = limit;
+   
+   // While we still have space on the smaller ring
    while (limit-- > 0) {
       struct netmap_slot *rs = &rxring->slot[j];
       struct netmap_slot *ts = &txring->slot[k];
       
       /* swap packets */
       if (ts->buf_idx < 2 || rs->buf_idx < 2) {
-         D("wrong index rx[%d] = %d  -> tx[%d] = %d",
-           j, rs->buf_idx, k, ts->buf_idx);
+         D("wrong index rx[%d] = %d  -> tx[%d] = %d", j, rs->buf_idx, k, ts->buf_idx);
          sleep(2);
       }
+      
       /* copy the packet length. */
       if (rs->len > 2048) {
          D("wrong len %d rx[%d] -> tx[%d]", rs->len, j, k);
          rs->len = 0;
-      } else if (verbose > 1) {
-         D("%s send len %d rx[%d] -> tx[%d]", msg, rs->len, j, k);
       }
+      
       ts->len = rs->len;
-      if (zerocopy) {
-         uint32_t pkt = ts->buf_idx;
-         ts->buf_idx = rs->buf_idx;
-         rs->buf_idx = pkt;
-         /* report the buffer change. */
-         ts->flags |= NS_BUF_CHANGED;
-         rs->flags |= NS_BUF_CHANGED;
-      } else {
-         char *rxbuf = NETMAP_BUF(rxring, rs->buf_idx);
-         char *txbuf = NETMAP_BUF(txring, ts->buf_idx);
-         nm_pkt_copy(rxbuf, txbuf, ts->len);
-      }
+      char *rxbuf = NETMAP_BUF(rxring, rs->buf_idx);
+      char *txbuf = NETMAP_BUF(txring, ts->buf_idx);
+      nm_pkt_copy(rxbuf, txbuf, ts->len);
+
+      // Next slot in the ring
       j = nm_ring_next(rxring, j);
       k = nm_ring_next(txring, k);
    }
+   
+   // Advance curent pointer and the head pointer to the last processed slot
    rxring->head = rxring->cur = j;
    txring->head = txring->cur = k;
-   if (verbose && m > 0)
-      D("%s sent %d packets to %p", msg, m, txring);
    
    return (m);
 }
 
 /* move packts from src to destination */
-static int move(struct nm_desc *src, struct nm_desc *dst, u_int limit)
+static int move(struct nm_desc *src, struct nm_desc *dst, uint32_t limit)
 {
-   struct netmap_ring *txring, *rxring;
-   u_int m = 0, si = src->first_rx_ring, di = dst->first_tx_ring;
-   const char *msg = (src->req.nr_ringid & NETMAP_SW_RING) ?
-   "host->net" : "net->host";
+   struct netmap_ring *txring;
+   struct netmap_ring *rxring;
+   uint32_t m = 0;
+   uint32_t si = src->first_rx_ring;
+   uint32_t di = dst->first_tx_ring;
    
    while (si <= src->last_rx_ring && di <= dst->last_tx_ring) {
       rxring = NETMAP_RXRING(src->nifp, si);
       txring = NETMAP_TXRING(dst->nifp, di);
-      ND("txring %p rxring %p", txring, rxring);
       if (nm_ring_empty(rxring)) {
          si++;
          continue;
@@ -142,19 +158,12 @@ static int move(struct nm_desc *src, struct nm_desc *dst, u_int limit)
          di++;
          continue;
       }
-      m += process_rings(rxring, txring, limit, msg);
+      m += process_rings(rxring, txring, limit);
    }
    
    return (m);
 }
 
-
-static void usage(void)
-{
-   fprintf(stderr,
-           "usage: bridge [-v] [-i ifa] [-i ifb] [-b burst] [-w wait_time] [iface]\n");
-   exit(1);
-}
 
 /*
  * bridge [-v] if1 [if2]
@@ -167,135 +176,105 @@ int main(int argc, char **argv)
 {
    struct pollfd pollfd[2];
    int ch;
-   u_int burst = 1024, wait_link = 4;
-   struct nm_desc *pa = NULL, *pb = NULL;
-   char *ifa = NULL, *ifb = NULL;
-   char ifabuf[64] = { 0 };
+   uint32_t burst = 1024;
+   uint32_t wait_link = 4;
+   char* ifa = NULL;
+   char* ifb = NULL;
+   char ifabuf[64] = {0};
    
-   fprintf(stderr, "%s built %s %s\n",
-           argv[0], __DATE__, __TIME__);
+   // One classifier per interface
+   /*
+    This could be simplified in one classifier for both.
+    But this would require to check on which interface the packet
+    come from to branch it to the other interface. As the number
+    of rules is low the memory overhead is not significant.
+    */
+   ifa_default_queue = new_queue(QUEUE_THRESHOLD, NB_THREADS);
+   size_t nb_ifa_rules = 1;
+   struct classifier_rule* ifa_rule = chkmalloc(sizeof(*ifa_rule) * nb_ifa_rules);
+   ifa_rule->fields = chkmalloc(sizeof(ifa->fields));
+   ifa_rule->fields[0]->bit_length = 16;
+   ifa_rule->fields[0]->mask = 255;
+   ifa_rule->fields[0]->offset = 16;
+   ifa_rule->fields[0]->value = 80;
+
+   ifb_default_queue = new_queue(QUEUE_THRESHOLD, NB_THREADS);
+   size_t nb_ifb_rules = 1;
+   struct classifier_rule* ifb_rule = chkmalloc(sizeof(*ifb_rule) * nb_ifb_rules);
+   ifb_rule->fields = chkmalloc(sizeof(ifb->fields));
+   ifb_rule->fields[0]->bit_length = 16;
+   ifb_rule->fields[0]->mask = 255;
+   ifb_rule->fields[0]->offset = 16;
+   ifb_rule->fields[0]->value = 80;
    
-   while ( (ch = getopt(argc, argv, "b:ci:vw:")) != -1) {
-      switch (ch) {
-         default:
-            D("bad option %c %s", ch, optarg);
-            usage();
-            break;
-         case 'b':	/* burst */
-            burst = atoi(optarg);
-            break;
-         case 'i':	/* interface */
-            if (ifa == NULL)
-               ifa = optarg;
-            else if (ifb == NULL)
-               ifb = optarg;
-            else
-               D("%s ignored, already have 2 interfaces",
-                 optarg);
-            break;
-         case 'c':
-            zerocopy = 0; /* do not zerocopy */
-            break;
-         case 'v':
-            verbose++;
-            break;
-         case 'w':
-            wait_link = atoi(optarg);
-            break;
-      }
-      
-   }
+   struct DNFC* ifa_classifier = new_DNFC(NB_THREADS,
+                                          ifa_rule,
+                                          nb_ifa_rules,
+                                          QUEUE_THRESHOLD,
+                                          put_default_ifa_queue,
+                                          verbose);
+   struct DNFC* ifa_classifier = new_DNFC(NB_THREADS,
+                                          ifb_rule,
+                                          nb_ifb_rules,
+                                          QUEUE_THRESHOLD,
+                                          put_default_ifb_queue,
+                                          verbose);
    
-   argc -= optind;
-   argv += optind;
-   
-   if (argc > 1)
-      ifa = argv[1];
-   if (argc > 2)
-      ifb = argv[2];
-   if (argc > 3)
-      burst = atoi(argv[3]);
-   if (!ifb)
-      ifb = ifa;
-   if (!ifa) {
-      D("missing interface");
-      usage();
-   }
-   if (burst < 1 || burst > 8192) {
-      D("invalid burst %d, set to 1024", burst);
-      burst = 1024;
-   }
-   if (wait_link > 100) {
-      D("invalid wait_link %d, set to 4", wait_link);
-      wait_link = 4;
-   }
-   if (!strcmp(ifa, ifb)) {
-      D("same interface, endpoint 0 goes to host");
-      snprintf(ifabuf, sizeof(ifabuf) - 1, "%s^", ifa);
-      ifa = ifabuf;
-   } else {
-      /* two different interfaces. Take all rings on if1 */
-   }
-   pa = nm_open(ifa, NULL, 0, NULL);
-   if (pa == NULL) {
+   // Open interface a
+   struct nm_desc *pa = nm_open(ifa, NULL, 0, NULL);
+   if (!pa) {
       D("cannot open %s", ifa);
       return (1);
    }
-   // XXX use a single mmap ?
-   pb = nm_open(ifb, NULL, NM_OPEN_NO_MMAP, pa);
-   if (pb == NULL) {
+   
+   // Open interface b and trying to reuse same mmaped region of pa
+   struct nm_desc *pb = nm_open(ifb, NULL, NM_OPEN_NO_MMAP, pa);
+   if (!pb) {
       D("cannot open %s", ifb);
       nm_close(pa);
       return (1);
    }
-   zerocopy = zerocopy && (pa->mem == pb->mem);
-   D("------- zerocopy %ssupported", zerocopy ? "" : "NOT ");
    
    /* setup poll(2) variables. */
    memset(pollfd, 0, sizeof(pollfd));
    pollfd[0].fd = pa->fd;
    pollfd[1].fd = pb->fd;
    
-   D("Wait %d secs for link to come up...", wait_link);
+   // Waiting for the link to be up
    sleep(wait_link);
-   D("Ready to go, %s 0x%x/%d <-> %s 0x%x/%d.",
-     pa->req.nr_name, pa->first_rx_ring, pa->req.nr_rx_rings,
-     pb->req.nr_name, pb->first_rx_ring, pb->req.nr_rx_rings);
    
    /* main loop */
    signal(SIGINT, sigint_h);
    while (!do_abort) {
-      int n0, n1, ret;
-      pollfd[0].events = pollfd[1].events = 0;
-      pollfd[0].revents = pollfd[1].revents = 0;
-      n0 = pkt_queued(pa, 0);
-      n1 = pkt_queued(pb, 0);
+      
+      // Setting variables
+      pollfd[0].events = 0;
+      pollfd[1].events = 0;
+      
+      pollfd[0].revents = 0;
+      pollfd[1].revents = 0;
+      
+      // Checking if there are space in the queues
+      int n0 = pkt_queued(pa, 0);
+      int n1 = pkt_queued(pb, 0);
+      
+      //Set fd event write if we have space in the queue
       if (n0)
          pollfd[1].events |= POLLOUT;
       else
          pollfd[0].events |= POLLIN;
+      
       if (n1)
          pollfd[0].events |= POLLOUT;
       else
          pollfd[1].events |= POLLIN;
-      ret = poll(pollfd, 2, 2500);
-      if (ret <= 0 || verbose)
-         D("poll %s [0] ev %x %x rx %d@%d tx %d,"
-           " [1] ev %x %x rx %d@%d tx %d",
-           ret <= 0 ? "timeout" : "ok",
-           pollfd[0].events,
-           pollfd[0].revents,
-           pkt_queued(pa, 0),
-           NETMAP_RXRING(pa->nifp, pa->cur_rx_ring)->cur,
-           pkt_queued(pa, 1),
-           pollfd[1].events,
-           pollfd[1].revents,
-           pkt_queued(pb, 0),
-           NETMAP_RXRING(pb->nifp, pb->cur_rx_ring)->cur,
-           pkt_queued(pb, 1)
-           );
+      
+      // Poll for events
+      int ret = poll(pollfd, 2, 2500);
       if (ret < 0)
          continue;
+      
+      // Check for errors
       if (pollfd[0].revents & POLLERR) {
          struct netmap_ring *rx = NETMAP_RXRING(pa->nifp, pa->cur_rx_ring);
          D("error on fd0, rx [%d,%d,%d)",
@@ -306,27 +285,17 @@ int main(int argc, char **argv)
          D("error on fd1, rx [%d,%d,%d)",
            rx->head, rx->cur, rx->tail);
       }
+      
+      // Move packet from an interface to another
       if (pollfd[0].revents & POLLOUT) {
          move(pb, pa, burst);
-         // XXX we don't need the ioctl */
-         // ioctl(me[0].fd, NIOCTXSYNC, NULL);
       }
       if (pollfd[1].revents & POLLOUT) {
          move(pa, pb, burst);
-         // XXX we don't need the ioctl */
-         // ioctl(me[1].fd, NIOCTXSYNC, NULL);
       }
    }
-   D("exiting");
    nm_close(pb);
    nm_close(pa);
    
    return (0);
-}
-
-void* job_classify(void* args)
-{
-   struct args_classification_t* args_cast = (struct args_classification_t*) args;
-   DNFC_process(args_cast->classifier, args_cast->pckt, args_cast->pckt_length);
-   return NULL;
 }

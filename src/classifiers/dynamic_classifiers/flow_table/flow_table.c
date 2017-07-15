@@ -1,25 +1,28 @@
 #include "flow_table.h"
 
-# define HEADER_LENGTH  320
+key_type get_key(u_char *pckt);
 
-uint32_t get_uint32_value(u_char *header,
-                          uint32_t offset,
-                          uint32_t length);
-key_type get_key(u_char *header);
+void parse_ethh(struct ether_header* ethh,
+                struct ip* ipv4_out,
+                struct ip6_hdr* ipv6_out);
+
+void parse_ipv4h(struct ip* ipv4h,
+                 struct tcphdr* tcp_out,
+                 struct udphdr* udp_out);
+
+void parse_ipv6h(struct ip6_hdr* ipv6h,
+                 struct tcphdr* tcp_out,
+                 struct udphdr* udp_out);
 
 /*             Flow Table private functions         */
 
 
 
 void* get_flow(struct hash_table* table,
-               u_char *header,
-               size_t header_length)
+               u_char* pckt)
 {
-   if(header_length < HEADER_LENGTH)
-      return NULL;
-   
    // Get the information of the flow
-   key_type key = get_key(header);
+   key_type key = get_key(pckt);
    void* result = hash_table_get(table, key);
    free_byte_stream(key);
    return result;
@@ -28,15 +31,11 @@ void* get_flow(struct hash_table* table,
 
 
 bool put_flow(struct hash_table* table,
-              u_char *header,
-              size_t header_length,
+              u_char* pckt,
               void* tag)
 {
-   if(header_length < HEADER_LENGTH)
-      return false;
-   
    // Get the information of the flow
-   key_type key = get_key(header);
+   key_type key = get_key(pckt);
    if (!hash_table_put(table, key, tag))
    {
       free_byte_stream(key);
@@ -48,14 +47,10 @@ bool put_flow(struct hash_table* table,
 
 
 bool remove_flow(struct hash_table* table,
-                 u_char *header,
-                 size_t header_length)
+                 u_char* pckt)
 {
-   if(header_length < HEADER_LENGTH)
-      return false;
-   
    // Get the information of the flow
-   key_type key = get_key(header);
+   key_type key = get_key(pckt);
    bool result = hash_table_remove(table, key);
    free_byte_stream(key);
    return result;
@@ -65,47 +60,120 @@ bool remove_flow(struct hash_table* table,
 
 /*             Flow Table private functions         */
 
-uint32_t get_uint32_value(u_char *header,
-                          uint32_t offset,
-                          uint32_t length)
+key_type get_key(u_char* pckt)
 {
-   uint32_t char_index_start = offset / 8;
-   uint32_t char_index_end = (offset + length - 1) / 8;
+   key_type key = new_byte_stream();
+   struct ether_header* ethh = (struct ether_header*)pckt;
    
-   // Getting the first part of the value and cleaning leading bits
-   uint32_t result = header[char_index_start];
-   uint32_t cleaning_mask = (uint32_t)0x1 << (8 - (offset % 8));
-   cleaning_mask--;
-   result = result & cleaning_mask;
-   char_index_start++;
+   // Layer 3 protocols
+   struct ip* ip4h = NULL;
+   struct ip6_hdr* ip6h = NULL;
    
-   // Getting the rest of the value
-   for (; char_index_start <= char_index_end; ++char_index_start)
+   // Layer 4 protocols
+   struct tcphdr* tcph = NULL;
+   struct udphdr* udph = NULL;
+   
+   // Parse layer 3
+   parse_ethh(ethh, ip4h, ip6h);
+   if(!ip4h && !ip6h)
    {
-      result = result << 8;
-      result = result | header[char_index_start];
+      fprintf(stderr, "Cannot parse layer 3 protocol!\n");
+      free_byte_stream(key);
+      return NULL;
+   }
+   append_bytes(key, ethh->ether_type, 1);
+   
+   // Parse layer 4
+   if(ip4h)
+   {
+      parse_ipv4h(ip4h, tcph, udph);
+      append_bytes(key, &ip4h->ip_src, 4);
+      append_bytes(key, &ip4h->ip_dst, 4);
+   }
+   if(ip6h)
+   {
+      parse_ipv6h(ip6h, tcph, udph);
+      append_bytes(key, &ip6h->ip6_src, 16);
+      append_bytes(key, &ip6h->ip6_dst, 16);
+   }
+   if(!tcph && !udph)
+   {
+      fprintf(stderr, "Cannot parse layer 4 protocol!\n");
+      return NULL;
    }
    
-   // Cleaning the end
-   uint32_t rest = (offset + length) % 8;
-   if (rest != 0)
-      result = result >> (8 - rest);
-   return result;
+   // Get the information to construct a key for the flow
+   if(tcph)
+   {
+      append_bytes(key, tcph->th_sport, 2);
+      append_bytes(key, tcph->th_dport, 2);
+   } else if(udph) {
+      append_bytes(key, udph->uh_sport, 2);
+      append_bytes(key, udph->uh_dport, 2);
+   }
+   
+   return key;
 }
 
 
-key_type get_key(u_char *header)
+
+void parse_ethh(struct ether_header* ethh,
+                struct ip* ipv4_out,
+                struct ip6_hdr* ipv6_out)
 {
-   key_type key = new_byte_stream();
-   uint32_t value = get_uint32_value(header, PROTOCOL * 8, 8);
-   append_bytes(key, &value, 1);
-   value = get_uint32_value(header, S_ADDR * 8, 32);
-   append_bytes(key, &value, 4);
-   value = get_uint32_value(header, D_ADDR * 8, 32);
-   append_bytes(key, &value, 4);
-   value = get_uint32_value(header, S_PORT * 8, 16);
-   append_bytes(key, &value, 2);
-   value = get_uint32_value(header, D_PORT * 8, 16);
-   append_bytes(key, &value, 2);
-   return key;
+   switch (ntohs(ethh->ether_type))
+   {
+      case ETHERTYPE_IP:
+         ipv4_out = ((struct ip *)(ethh + 1));
+         return;
+      case ETHERTYPE_IPV6:
+         ipv6_out = ((struct ip6_hdr *)(ethh + 1));
+         return;
+      default:
+         return;
+   }
+}
+
+
+
+void parse_ipv4h(struct ip* ipv4h,
+                 struct tcphdr* tcp_out,
+                 struct udphdr* udp_out)
+{
+   switch (ipv4h->ip_p)
+   {
+      case IPPROTO_TCP:
+         tcp_out = (struct tcphdr *)((uint8_t *)ipv4h + (ipv4h->ip_hl<<2));
+         return;
+      case IPPROTO_UDP:
+         udp_out = (struct udphdr *)((uint8_t *)ipv4h + (ipv4h->ip_hl<<2));
+         return;
+      case IPPROTO_IPV4:
+         ipv4h = ((struct ip *)((uint8_t *)ipv4h + (ipv4h->ip_hl<<2)));
+         return parse_ipv4h(ipv4h, tcp_out, udp_out);
+      default:
+         return;
+   }
+}
+
+
+
+void parse_ipv6h(struct ip6_hdr* ipv6h,
+                 struct tcphdr* tcp_out,
+                 struct udphdr* udp_out)
+{
+   switch (ntohs(ipv6h->ip6_ctlun.ip6_un1.ip6_un1_nxt))
+   {
+      case IPPROTO_TCP:
+         tcp_out = (struct tcphdr *)(ipv6h + 1);
+         return;
+      case IPPROTO_UDP:
+         udp_out = (struct udphdr *)(ipv6h + 1);
+         return;
+      case IPPROTO_IPV4:
+         return parse_ipv4h((struct ip *)(ipv6h + 1), tcp_out, udp_out);
+      case IPPROTO_IPV6:
+         ipv6h = (struct ip6_hdr *)(ipv6h + 1);
+         return parse_ipv6h(ipv6h, tcp_out, udp_out);
+      }
 }

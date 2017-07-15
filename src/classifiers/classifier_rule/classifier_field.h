@@ -18,8 +18,8 @@
 #define PROTOCOL 9
 #define S_ADDR 12
 #define D_ADDR 16
-#define S_PORT 36
-#define D_PORT 38
+#define S_PORT 0
+#define D_PORT 2
 
 struct classifier_field
 {
