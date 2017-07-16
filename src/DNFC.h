@@ -7,10 +7,6 @@
 #include "classifiers/static_classifiers/static_classifiers.h"
 #include "../libs/queue/queue.h"
 
-/* Supported protocols headers */
-
-#include "protocols/TCP/TCP.h"
-
 typedef unsigned char u_char; // Defining u_char type for convenient display
 
 struct tuple

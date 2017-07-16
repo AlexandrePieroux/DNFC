@@ -23,13 +23,12 @@
 #include "../../../../libs/hash_table/hash_table.h"
 
 typedef unsigned char u_char;
+typedef struct hash_table flow_table;
 
+void* get_flow(flow_table* table, u_char* pckt);
 
+key_type put_flow(flow_table* table, u_char* pckt, void* tag);
 
-void* get_flow(struct hash_table* table, u_char* pckt);
-
-bool put_flow(struct hash_table* table, u_char* pckt, void* tag);
-
-bool remove_flow(struct hash_table* table, u_char* pckt);
+bool remove_flow(flow_table* table, u_char* pckt);
 
 #endif

@@ -18,7 +18,7 @@ void parse_ipv6h(struct ip6_hdr* ipv6h,
 
 
 
-void* get_flow(struct hash_table* table,
+void* get_flow(flow_table* table,
                u_char* pckt)
 {
    // Get the information of the flow
@@ -32,9 +32,9 @@ void* get_flow(struct hash_table* table,
 
 
 
-bool put_flow(struct hash_table* table,
-              u_char* pckt,
-              void* tag)
+key_type put_flow(flow_table* table,
+                  u_char* pckt,
+                  void* tag)
 {
    // Get the information of the flow
    key_type key = get_key(pckt);
@@ -43,14 +43,14 @@ bool put_flow(struct hash_table* table,
    if (!hash_table_put(table, key, tag))
    {
       free_byte_stream(key);
-      return false;
+      return NULL;
    }
-   return true;
+   return key;
 }
 
 
 
-bool remove_flow(struct hash_table* table,
+bool remove_flow(flow_table* table,
                  u_char* pckt)
 {
    // Get the information of the flow
@@ -69,6 +69,8 @@ bool remove_flow(struct hash_table* table,
 key_type get_key(u_char* pckt)
 {
    key_type key = new_byte_stream();
+   
+   // Layer 2 protocol
    struct ether_header* ethh = (struct ether_header*)pckt;
    
    // Layer 3 protocols
