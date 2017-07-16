@@ -55,10 +55,12 @@ void DNFC_process(struct DNFC* classifier,
       return;
    }
    
+   // If no action is found we instantiate a new queue and a new flow table
    if(!action)
    {
       action = chkmalloc(sizeof(struct tuple*));
       action->a = new_queue(classifier->queue_limit, classifier->nb_thread);
+      action->b = new_hash_table(FNV_1, classifier->nb_thread);
    }
    
    // Search for a match in the dynamic classifier
@@ -74,6 +76,11 @@ void DNFC_process(struct DNFC* classifier,
 }
 
 
+void DNFC_free_tag(void* tag)
+{
+   key_type key = (key_type)tag;
+   free_byte_stream(key);
+}
 
 /*          Private Functions              */
 
@@ -82,14 +89,10 @@ tag* get_flow_tag(struct DNFC* classifier,
                   size_t pckt_len,
                   void* protocol_action)
 {
-   // Retrieve the flow table of the rule that matched
-   if(!protocol_action)
-      protocol_action = new_hash_table(FNV_1, classifier->nb_thread);
-   
    // Prepare to insert the packet in the linked list of packets of the flow
    key_type new_flow_key = new_byte_stream();
    append_bytes(new_flow_key, pckt, pckt_len);
-   struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV_1, pckt);
+   struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
    
    // Retrieve the list of packets for that flow
    struct tuple* flow_tag = (struct tuple*) get_flow((flow_table*)protocol_action, pckt, header_size);
@@ -108,13 +111,6 @@ tag* get_flow_tag(struct DNFC* classifier,
    }
    
    return flow_tag;
-}
-
-
-void DNFC_TCP_free_tag(void* tag)
-{
-   key_type key = (key_type)tag;
-   free_byte_stream(key);
 }
 
 /*          Private Functions              */

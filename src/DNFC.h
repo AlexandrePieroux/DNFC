@@ -33,6 +33,8 @@ struct DNFC* new_DNFC(size_t nb_threads,
 
 void DNFC_process(struct DNFC* classifier, u_char* pckt, size_t pckt_length);
 
+void DNFC_free_tag(void* tag);
+
 //void free_DNFC(struct DNFC* classifier);
 
 #endif
