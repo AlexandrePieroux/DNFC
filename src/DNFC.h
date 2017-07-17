@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #include "classifiers/static_classifiers/static_classifiers.h"
+#include "classifiers/dynamic_classifiers/dynamic_classifiers.h"
 #include "../libs/queue/queue.h"
 
 typedef unsigned char u_char; // Defining u_char type for convenient display

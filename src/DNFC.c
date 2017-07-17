@@ -49,9 +49,9 @@ void DNFC_process(struct DNFC* classifier,
 {
    // Search for a match in the static classifier
    struct tuple* action = NULL;
-   if(!hypercuts_search(classifier->static_classifier, pckt, header_length, (void**)&action))
+   if(!hypercuts_search(classifier->static_classifier, pckt_len, pckt, (void**)&action))
    {
-      classifier->callback(pckt, pckt_length);
+      classifier->callback(pckt, pckt_len);
       return;
    }
    
@@ -64,7 +64,7 @@ void DNFC_process(struct DNFC* classifier,
    }
    
    // Search for a match in the dynamic classifier
-   tag* flow_tag = get_flow_tag(classifier, pckt, pckt_length, action->b);
+   tag* flow_tag = get_flow_tag(classifier, pckt, pckt_len, action->b);
    
    // We build a pair with the tag and the packet
    struct tuple* packet_result = chkmalloc(sizeof(*packet_result));
@@ -76,9 +76,9 @@ void DNFC_process(struct DNFC* classifier,
 }
 
 
-void DNFC_free_tag(void* tag)
+void DNFC_free_tag(void* tag_item)
 {
-   key_type key = (key_type)tag;
+   key_type key = (key_type)tag_item;
    free_byte_stream(key);
 }
 
@@ -95,7 +95,7 @@ tag* get_flow_tag(struct DNFC* classifier,
    struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
    
    // Retrieve the list of packets for that flow
-   struct tuple* flow_tag = (struct tuple*) get_flow((flow_table*)protocol_action, pckt, header_size);
+   struct tuple* flow_tag = (struct tuple*) get_flow((flow_table*)protocol_action, pckt);
    if(!flow_tag)
    {
       // The tag is a tuple that contain the linked list representing the packets

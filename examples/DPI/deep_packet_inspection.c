@@ -195,7 +195,7 @@ int main(int argc, char **argv)
    ifa_rule->fields = chkmalloc(sizeof(ifa->fields));
    ifa_rule->fields[0]->bit_length = 16;
    ifa_rule->fields[0]->mask = 255;
-   ifa_rule->fields[0]->offset = 16;
+   ifa_rule->fields[0]->offset = 264;
    ifa_rule->fields[0]->value = 80;
 
    ifb_default_queue = new_queue(QUEUE_THRESHOLD, NB_THREADS);
@@ -204,7 +204,7 @@ int main(int argc, char **argv)
    ifb_rule->fields = chkmalloc(sizeof(ifb->fields));
    ifb_rule->fields[0]->bit_length = 16;
    ifb_rule->fields[0]->mask = 255;
-   ifb_rule->fields[0]->offset = 16;
+   ifb_rule->fields[0]->offset = 264;
    ifb_rule->fields[0]->value = 80;
    
    struct DNFC* ifa_classifier = new_DNFC(NB_THREADS,
