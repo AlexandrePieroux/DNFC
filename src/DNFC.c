@@ -3,9 +3,6 @@
 
 /*          Private Functions              */
 
-#define tag void
-#define new_tag chkmalloc(sizeof(tag))
-
 struct DNFC_pckt* get_DNFC_pckt(u_char* pckt,
                                 size_t pckt_length);
 
@@ -13,10 +10,10 @@ void init_queue(struct queue* queue,
                 size_t nb_threads,
                 size_t queue_limit);
 
-tag* get_flow_tag(struct DNFC* classifier,
-                  u_char* pckt,
-                  size_t pckt_len,
-                  void* protocol_action);
+struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
+                              u_char* pckt,
+                              size_t pckt_len,
+                              flow_table* protocol_action);
 
 key_type get_key(u_char* pckt,
                  size_t pckt_len);
@@ -51,7 +48,7 @@ bool DNFC_process(struct DNFC* classifier,
                   size_t pckt_len)
 {
    // Search for a match in the static classifier
-   struct tuple* action = NULL;
+   struct DNFC_action* action = NULL;
    if(!hypercuts_search(classifier->static_classifier, pckt_len, pckt, (void**)&action))
    {
       classifier->callback(pckt, pckt_len);
@@ -61,34 +58,26 @@ bool DNFC_process(struct DNFC* classifier,
    // If no action is found we instantiate a new queue and a new flow table
    if(!action)
    {
-      action = chkmalloc(sizeof(struct tuple*));
-      action->a = new_queue(classifier->queue_limit, classifier->nb_thread);
-      action->b = new_hash_table(FNV_1, classifier->nb_thread);
+      action = chkmalloc(sizeof(struct DNFC_action*));
+      action->pckt_queue = new_queue(classifier->queue_limit, classifier->nb_thread);
+      action->flow_table = new_hash_table(FNV_1, classifier->nb_thread);
    }
    
    // Search for a match in the dynamic classifier
-   tag* flow_tag = get_flow_tag(classifier, pckt, pckt_len, action->b);
+   struct DNFC_tag* flow_tag = get_flow_tag(classifier, pckt, pckt_len, action->flow_table);
    
    // We build a pair with the tag and the packet
-   struct tuple* packet_result = chkmalloc(sizeof(*packet_result));
-   packet_result->a = flow_tag;
-   packet_result->b = pckt;
+   struct DNFC_tagged_pckt* packet_result = chkmalloc(sizeof(*packet_result));
+   packet_result->tag = flow_tag;
    
-   // We push the pair in the queue of the static rule
-   queue_push(action->a, packet_result);
+   packet_result->pckt = chkmalloc(sizeof(struct DNFC_pckt*));
+   packet_result->pckt->data = pckt;
+   packet_result->pckt->size = pckt_len;
    
+   // We push the result in the queue of the static rule
+   queue_push(action->pckt_queue, packet_result);
    return true;
 }
-
-
-struct queue* DNFC_get_rule_queue(struct classifier_rule* rule)
-{
-   struct tuple* action_tuple = (struct tuple*) rule->action;
-   if(!action_tuple)
-      return NULL;
-   return (struct queue*) action_tuple->a;
-}
-
 
 void DNFC_free_tag(void* tag_item)
 {
@@ -100,31 +89,38 @@ void DNFC_free_tag(void* tag_item)
 
 /*          Private Functions              */
 
-tag* get_flow_tag(struct DNFC* classifier,
+struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
                   u_char* pckt,
                   size_t pckt_len,
-                  void* protocol_action)
+                  flow_table* flow_table)
 {
    // Prepare to insert the packet in the linked list of packets of the flow
    key_type new_flow_key = get_key(pckt, pckt_len);
    struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
    
    // Retrieve the list of packets for that flow
-   struct tuple* flow_tag = (struct tuple*) get_flow((flow_table*)protocol_action, pckt);
+   struct DNFC_tag* flow_tag = get_flow(flow_table, pckt);
    if(!flow_tag)
    {
       // The tag is a tuple that contain the linked list representing the packets
       // received for the matched flow and the hazardous pointers for that list.
       // Note: HPs are mandatory to manipulate the linked list in a concurrent environement
       flow_tag = chkmalloc(sizeof(*flow_tag));
-      flow_tag->a = pckt_llist;
-      flow_tag->b = linked_list_init(classifier->nb_thread);
-      
-      put_flow(protocol_action, pckt, flow_tag);
-   } else {
-      linked_list_insert(flow_tag->b, (struct linked_list**)&flow_tag->a, pckt_llist);
-   }
+      flow_tag->flow_pckt_list = pckt_llist;
+      flow_tag->flow_pckt_list_hps = linked_list_init(classifier->nb_thread);
    
+      if(!put_flow(flow_table, pckt, flow_tag))
+      {
+         linked_list_free(&flow_tag->flow_pckt_list);
+         free_hp(flow_tag->flow_pckt_list_hps);
+         free(flow_tag);
+         
+         flow_tag = get_flow(flow_table, pckt);
+         linked_list_insert(flow_tag->flow_pckt_list_hps, &flow_tag->flow_pckt_list, pckt_llist);
+      }
+   } else {
+      linked_list_insert(flow_tag->flow_pckt_list_hps, &flow_tag->flow_pckt_list, pckt_llist);
+   }
    return flow_tag;
 }
 

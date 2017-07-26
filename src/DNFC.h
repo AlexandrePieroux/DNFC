@@ -10,10 +10,28 @@
 
 typedef unsigned char u_char; // Defining u_char type for convenient display
 
-struct tuple
+struct DNFC_action
 {
-   void* a;
-   void* b;
+   struct queue* pckt_queue;
+   flow_table* flow_table;
+};
+
+struct DNFC_pckt
+{
+   u_char* data;
+   size_t size;
+};
+
+struct DNFC_tag
+{
+   struct linked_list* flow_pckt_list;
+   struct hazard_pointer* flow_pckt_list_hps;
+};
+
+struct DNFC_tagged_pckt
+{
+   struct DNFC_tag* tag;
+   struct DNFC_pckt* pckt;
 };
 
 struct DNFC

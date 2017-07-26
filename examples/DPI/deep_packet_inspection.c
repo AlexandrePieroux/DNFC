@@ -39,6 +39,8 @@ static int do_abort = 0;
 
 /*       Private variables       */
 
+
+
 /*       Private Function       */
 
 // Print program usage
@@ -62,9 +64,6 @@ static int pckt_from_queue_iface(struct nm_desc *dst,
 static int process_queue_to_rings(struct netmap_ring *txring,
                                   uint32_t limit,
                                   struct queue* queue);
-
-// Retrieve the packet length
-size_t get_pckt_lenght(char* pckt);
 
 // Return the number of slots available in each transmission rings of the decriptor if tx is superior 1, otherwise
 // it return the number of slots available in each transmission rings of the decriptor.
@@ -214,6 +213,7 @@ int main(int argc, char **argv)
          pckt_from_queue_iface(phost, burst, default_host_stack_q);
       if (default_iface_q->size != 0)
          pckt_from_queue_iface(phost, burst, default_iface_q);
+      
       
       // Move packets from the classifier to the interface/host stack
       if (pollfd[0].revents & POLLOUT)
@@ -387,13 +387,13 @@ static int process_queue_to_rings(struct netmap_ring *txring,
       }
       
       // Pop a packet from the queue
-      struct tuple* txtuple = (struct tuple*)queue_pop(queue);
+      struct DNFC_tagged_pckt* txtuple = (struct tuple*)queue_pop(queue);
       if(!txtuple)
          return(m);
-      char* pckt = txtuple->b;
+      char* pckt = txtuple->pckt->data;
       
       // Get the packet length and the buffer to receive it
-      ts->len = get_pckt_lenght(pckt);
+      ts->len = txtuple->pckt->size;
       if (ts->len > 2048) {
          D("wrong len %d tx[%d]", ts->len, k);
          ts->len = 0;
@@ -410,12 +410,6 @@ static int process_queue_to_rings(struct netmap_ring *txring,
    // Advance curent pointer and the head pointer to the last processed slot
    txring->head = txring->cur = k;
    return (m);
-}
-
-
-size_t get_pckt_lenght(char* pckt)
-{
-   
 }
 
 
@@ -438,7 +432,8 @@ int pkt_queued(struct nm_desc *d, int tx)
 void* job_classify(void* args)
 {
    struct args_classification_t* args_cast = (struct args_classification_t*) args;
-   DNFC_process(args_cast->classifier, args_cast->pckt, args_cast->pckt_length);
+   if(DNFC_process(args_cast->classifier, args_cast->pckt, args_cast->pckt_length))
+      D("A match was found dear!\n");
    return NULL;
 }
 
