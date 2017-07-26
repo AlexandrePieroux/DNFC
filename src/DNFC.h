@@ -32,7 +32,9 @@ struct DNFC* new_DNFC(size_t nb_threads,
                       void (*callback)(u_char*, size_t),
                       bool verbose);
 
-void DNFC_process(struct DNFC* classifier, u_char* pckt, size_t pckt_length);
+bool DNFC_process(struct DNFC* classifier, u_char* pckt, size_t pckt_length);
+
+struct queue* DNFC_get_rule_queue(struct classifier_rule* rule);
 
 void DNFC_free_tag(void* tag);
 

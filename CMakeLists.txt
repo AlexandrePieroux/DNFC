@@ -7,6 +7,10 @@ set (MEMORY_MANAGEMENT
 		 libs/memory_management/memory_management.c
 		 libs/memory_management/memory_management.h)
 
+set (PACKET_PARSING
+       libs/packet_parsing/packet_parsing.c
+       libs/packet_parsing/packet_parsing.h)
+
 set (HAZARD_POINTER
        libs/SMR/hazard_pointer.c
        libs/SMR/hazard_pointer.h)
@@ -73,6 +77,7 @@ set (DNFC
 
 # Add the Libraries
 add_library (memory_management ${MEMORY_MANAGEMENT})
+add_library (packet_parsing ${PACKET_PARSING})
 add_library (SMR ${HAZARD_POINTER})
 add_library (byte_stream ${BYTE_STREAM})
 add_library (linked_list ${LINKED_LIST})
@@ -98,6 +103,7 @@ target_link_libraries (thread_pool
 target_link_libraries (queue
                        SMR)
 target_link_libraries (dynamic_classifiers
+                       packet_parsing
 						     hash_table
                        byte_stream)
 target_link_libraries (static_classifiers
@@ -149,8 +155,6 @@ set (HASH_TABLE_TEST tests/hash_table_test.cpp)
 set (FLOW_TABLE_TEST tests/flow_table_test.cpp)
 set (HYPERCUTS_TEST tests/hypercuts_test.cpp)
 set (QUEUE_TEST tests/queue_test.cpp)
-set (DNFC_TEST tests/DNFC_test.cpp)
-
 
 # Examples
 set (DPI_example examples/DPI/deep_packet_inspection.c)
@@ -162,7 +166,6 @@ add_executable (hash_table_test ${HASH_TABLE_TEST})
 add_executable (hypercuts_test ${HYPERCUTS_TEST})
 add_executable (flow_table_test ${FLOW_TABLE_TEST})
 add_executable (queue_test ${QUEUE_TEST})
-add_executable (DNFC_test ${DNFC_TEST})
 
 
 # Executables examples
@@ -193,11 +196,6 @@ target_link_libraries (queue_test
                         queue
                         thread_pool
                         gtest gtest_main)
-target_link_libraries (DNFC_test
-								hash_table
-								thread_pool
-								static_classifiers
-								gtest gtest_main)
 
 
 # Link examples dependencies
@@ -211,4 +209,3 @@ add_test(NAME hash_table_test COMMAND hash_table_test)
 add_test(NAME flow_table_test COMMAND flow_table_test)
 add_test(NAME hypercuts_test COMMAND hypercuts_test)
 add_test(NAME queue_test COMMAND queue_test)
-add_test(NAME DNFC_test COMMAND DNFC_test)

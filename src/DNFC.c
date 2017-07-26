@@ -18,6 +18,9 @@ tag* get_flow_tag(struct DNFC* classifier,
                   size_t pckt_len,
                   void* protocol_action);
 
+key_type get_key(u_char* pckt,
+                 size_t pckt_len);
+
 /*          Private Functions              */
 
 
@@ -43,7 +46,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
 
 
 
-void DNFC_process(struct DNFC* classifier,
+bool DNFC_process(struct DNFC* classifier,
                   u_char* pckt,
                   size_t pckt_len)
 {
@@ -52,7 +55,7 @@ void DNFC_process(struct DNFC* classifier,
    if(!hypercuts_search(classifier->static_classifier, pckt_len, pckt, (void**)&action))
    {
       classifier->callback(pckt, pckt_len);
-      return;
+      return false;
    }
    
    // If no action is found we instantiate a new queue and a new flow table
@@ -73,6 +76,17 @@ void DNFC_process(struct DNFC* classifier,
    
    // We push the pair in the queue of the static rule
    queue_push(action->a, packet_result);
+   
+   return true;
+}
+
+
+struct queue* DNFC_get_rule_queue(struct classifier_rule* rule)
+{
+   struct tuple* action_tuple = (struct tuple*) rule->action;
+   if(!action_tuple)
+      return NULL;
+   return (struct queue*) action_tuple->a;
 }
 
 
@@ -82,6 +96,8 @@ void DNFC_free_tag(void* tag_item)
    free_byte_stream(key);
 }
 
+
+
 /*          Private Functions              */
 
 tag* get_flow_tag(struct DNFC* classifier,
@@ -90,8 +106,7 @@ tag* get_flow_tag(struct DNFC* classifier,
                   void* protocol_action)
 {
    // Prepare to insert the packet in the linked list of packets of the flow
-   key_type new_flow_key = new_byte_stream();
-   append_bytes(new_flow_key, pckt, pckt_len);
+   key_type new_flow_key = get_key(pckt, pckt_len);
    struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
    
    // Retrieve the list of packets for that flow
@@ -114,3 +129,49 @@ tag* get_flow_tag(struct DNFC* classifier,
 }
 
 /*          Private Functions              */
+
+/*          Parse packet function          */
+
+key_type get_key(u_char* pckt, size_t pckt_len)
+{
+   key_type key = new_byte_stream();
+   
+   // Layer 2 protocol
+   struct ether_header* ethh = (struct ether_header*)pckt;
+   
+   // Layer 3 protocols
+   struct ip* ip4h = NULL;
+   struct ip6_hdr* ip6h = NULL;
+   
+   // Layer 4 protocols
+   struct tcphdr* tcph = NULL;
+   struct udphdr* udph = NULL;
+   
+   // Parse layer 3
+   parse_ethh(ethh, &ip4h, &ip6h);
+   if(!ip4h && !ip6h)
+   {
+      fprintf(stderr, "Cannot parse layer 3 protocol!\n");
+      return NULL;
+   }
+   
+   // Parse layer 4
+   if(ip4h)
+      parse_ipv4h(&ip4h, &tcph, &udph);
+
+   if(ip6h)
+      parse_ipv6h(&ip6h, &tcph, &udph);
+   
+   if(!tcph && !udph)
+   {
+      fprintf(stderr, "Cannot parse layer 4 protocol!\n");
+      return NULL;
+   }
+   
+   // Get the information to construct a key for the flow
+   if(tcph)
+      append_bytes(key, tcph->th_seq, 4);
+   else
+      append_bytes(key, pckt, pckt_len);
+   return key;
+}

@@ -12,14 +12,8 @@
  * AUTHOR :    Pieroux Alexandre
  *H*/
 
-#include <net/ethernet.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
-#include <netinet/ip6.h>
-
 #include "../../classifier_rule/classifier_field.h"
+#include "../../../../libs/packet_parsing/packet_parsing.h"
 #include "../../../../libs/hash_table/hash_table.h"
 
 typedef unsigned char u_char;
