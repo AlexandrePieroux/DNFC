@@ -265,7 +265,7 @@ struct classifier_rule** get_rule_set()
    // Port 80 destination field
    rules[0]->fields[0]->bit_length = 16;
    rules[0]->fields[0]->mask = 255;
-   rules[0]->fields[0]->offset = 264;
+   rules[0]->fields[0]->offset = 272;
    rules[0]->fields[0]->value = 80;
    
    // Seconde rule
@@ -274,7 +274,7 @@ struct classifier_rule** get_rule_set()
    // Port 80 source field
    rules[1]->fields[0]->bit_length = 16;
    rules[1]->fields[0]->mask = 255;
-   rules[1]->fields[0]->offset = 280;
+   rules[1]->fields[0]->offset = 288;
    rules[1]->fields[0]->value = 80;
    
    return rules;

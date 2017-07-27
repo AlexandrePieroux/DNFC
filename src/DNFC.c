@@ -96,7 +96,7 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
 {
    // Prepare to insert the packet in the linked list of packets of the flow
    key_type new_flow_key = get_key(pckt, pckt_len);
-   struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
+   struct linked_list* pckt_llist = new_linked_list(new_flow_key, new_flow_key, pckt);
    
    // Retrieve the list of packets for that flow
    struct DNFC_tag* flow_tag = get_flow(flow_table, pckt);
@@ -109,12 +109,14 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
       flow_tag->flow_pckt_list = pckt_llist;
       flow_tag->flow_pckt_list_hps = linked_list_init(classifier->nb_thread);
    
-      if(!put_flow(flow_table, pckt, flow_tag))
+      if(!put_flow(flow_table, pckt, flow_tag)) // Check if the tag was already inserted while building it
       {
+         // If it was already inserted we free the one we created
          linked_list_free(&flow_tag->flow_pckt_list);
          free_hp(flow_tag->flow_pckt_list_hps);
          free(flow_tag);
          
+         // We are sure here that the tag will be retrieved (as we don't delete it from the flow table yet)
          flow_tag = get_flow(flow_table, pckt);
          linked_list_insert(flow_tag->flow_pckt_list_hps, &flow_tag->flow_pckt_list, pckt_llist);
       }
@@ -168,6 +170,6 @@ key_type get_key(u_char* pckt, size_t pckt_len)
    if(tcph)
       append_bytes(key, tcph->th_seq, 4);
    else
-      append_bytes(key, pckt, pckt_len);
+      append_bytes(key, udph, 8);
    return key;
 }
