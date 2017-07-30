@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 2.8.2)
 project (DNFC)
 
+find_package(Threads REQUIRED)
 
 # Libraries
 set (MEMORY_MANAGEMENT
@@ -99,7 +100,8 @@ target_link_libraries (hash_table
                        linked_list
                        byte_stream)
 target_link_libraries (thread_pool
-                       memory_management)
+                       memory_management
+                       pthread)
 target_link_libraries (queue
                        SMR)
 target_link_libraries (dynamic_classifiers
