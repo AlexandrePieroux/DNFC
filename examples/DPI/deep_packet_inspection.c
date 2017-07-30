@@ -230,9 +230,9 @@ int main(int argc, char **argv)
       
       // Move packets from the classifier to the interface/host stack
       if (pollfd[0].revents & POLLOUT)
-         pckt_from_queue_iface(phost, burst, DNFC_get_rule_queue(rules[1]), tagged_pckt_process);
+         pckt_from_queue_iface(phost, burst, ((struct DNFC_action*) rules[1]->action)->pckt_queue, tagged_pckt_process);
       if (pollfd[1].revents & POLLOUT)
-         pckt_from_queue_iface(pa, burst, DNFC_get_rule_queue(rules[0]), tagged_pckt_process);
+         pckt_from_queue_iface(pa, burst, ((struct DNFC_action*) rules[0]->action)->pckt_queue, tagged_pckt_process);
       
       
       // Process the default queues
