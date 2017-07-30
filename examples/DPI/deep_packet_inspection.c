@@ -67,7 +67,7 @@ static int move_pckt_to_classifier(struct nm_desc *src,
 static int pckt_from_queue_iface(struct nm_desc *dst,
                                  uint32_t limit,
                                  struct queue* queue,
-                                 (void)(pckt_process)(char**, size_t*, struct queue*));
+                                 void (*pckt_process)(char**, size_t*, struct queue*));
 
 // Process tagged packets
 void tagged_pckt_process(char** pckt, size_t* size, struct queue* queue);
@@ -135,12 +135,12 @@ int main(int argc, char **argv)
    snprintf(host_buff, sizeof(host_buff) - 1, "%s^", ifa);
    char* host_stack = host_buff;
    
-   size_t nb_rules = 4;
+   size_t nb_rules = 2;
    struct classifier_rule** rules = get_rule_set();
    
    // Initiate the classifier with the rules
    struct DNFC* classifier = new_DNFC(NB_THREADS,
-                                      rules,
+                                      &rules,
                                       nb_rules,
                                       QUEUE_THRESHOLD,
                                       NULL,
@@ -267,7 +267,7 @@ void usage()
 
 struct classifier_rule** get_rule_set()
 {
-   struct classifier_rule** rules = chkmalloc(sizeof(*rules) * nb_rules);
+   struct classifier_rule** rules = chkmalloc(sizeof(*rules) * 2);
    
    // First rule
    rules[0]->fields = chkmalloc(sizeof(rules[0]->fields) * 2);
@@ -336,7 +336,7 @@ static int move_pckt_to_classifier(struct nm_desc *src,
          threadpool_add_work(classify_pool, job_classify, args);
          
          // Next slot in the ring
-         k = nm_ring_next(txring, k);
+         k = nm_ring_next(rxring, k);
       }
       rxring->head = rxring->cur = k;
    }
@@ -348,7 +348,7 @@ static int move_pckt_to_classifier(struct nm_desc *src,
 static int pckt_from_queue_iface(struct nm_desc *dst,
                                  uint32_t limit,
                                  struct queue* queue,
-                                 (void)(pckt_process)(char**, size_t*, struct queue*))
+                                 void (*pckt_process)(char**, size_t*, struct queue*))
 {
    struct netmap_ring *txring;
    uint32_t m_tot = 0;
@@ -450,7 +450,7 @@ void tagged_pckt_process(char** pckt, size_t* size, struct queue* queue)
 void non_tagged_pckt_process(char** pckt, size_t* size, struct queue* queue)
 {
    // Pop a packet from the queue
-   struct DNFC_pckt* txtuple = (struct DNFC_tagged_pckt*)queue_pop(queue);
+   struct DNFC_pckt* txtuple = (struct DNFC_pckt*)queue_pop(queue);
    if(!txtuple)
       return;
    *pckt = txtuple->data;

@@ -35,7 +35,7 @@ struct DNFC* new_DNFC(size_t nb_threads,
       (*rules)[i]->action = NULL;
    
    // Create the hypercut tree structure for static classification
-   result->static_classifier = new_hypercuts_classifier(rules, nb_rules, verbose);
+   result->static_classifier = new_hypercuts_classifier(rules, &nb_rules, verbose);
    result->nb_thread = nb_threads;
    result->callback = callback;
    return result;
@@ -169,7 +169,7 @@ key_type get_key(u_char* pckt, size_t pckt_len)
    
    // Get the information to construct a key for the flow
    if(tcph)
-      append_bytes(key, tcph->th_seq, 4);
+      append_bytes(key, &tcph->th_seq, 4);
    else
       append_bytes(key, udph, pckt_len);
    return key;
