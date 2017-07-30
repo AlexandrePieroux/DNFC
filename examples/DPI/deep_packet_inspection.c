@@ -17,14 +17,16 @@
 #define NB_THREADS   64
 #define QUEUE_THRESHOLD   4096
 
-/*        Private variables       */
 
+
+/*        Private variables       */
 // Structure used to store arguments for the classifiction of a packet
 struct args_classification_t
 {
    struct DNFC* classifier;
    u_char* pckt;
    size_t pckt_length;
+   struct nm_desc* stack;
 };
 
 // Structure used to store arguments for the inspection of a packet
@@ -37,12 +39,18 @@ struct args_inspection_t
 int verbose = 0;
 static int do_abort = 0;
 
+// Default queue
+struct queue* default_pa_q;
+struct queue* default_phost_q;
+
+// Interfaces descriptors
+struct nm_desc* pa;
+struct nm_desc* phost;
 /*       Private variables       */
 
 
 
 /*       Private Function       */
-
 // Print program usage
 void usage();
 
@@ -58,12 +66,14 @@ static int move_pckt_to_classifier(struct nm_desc *src,
 // Move available packets in the queue in the destination interface until 'limit' is reached
 static int pckt_from_queue_iface(struct nm_desc *dst,
                                  uint32_t limit,
-                                 struct queue* queue);
+                                 struct queue* queue,
+                                 (void)(pckt_process)(char**, size_t*, struct queue*));
 
-// Process the specified queue to the specified netmap ring
-static int process_queue_to_rings(struct netmap_ring *txring,
-                                  uint32_t limit,
-                                  struct queue* queue);
+// Process tagged packets
+void tagged_pckt_process(char** pckt, size_t* size, struct queue* queue);
+
+// Process non-tagged packets
+void non_tagged_pckt_process(char** pckt, size_t* size, struct queue* queue);
 
 // Return the number of slots available in each transmission rings of the decriptor if tx is superior 1, otherwise
 // it return the number of slots available in each transmission rings of the decriptor.
@@ -73,13 +83,12 @@ int pkt_queued(struct nm_desc *d, int tx);
 // Use an instantiated classifier to classify a given packet
 void* job_classify(void* args);
 
-// Inspection job method:
-// Inspect a given packet based on static criterions using his tag (context)
-void* job_inspect(void* args);
+void default_action(u_char* pckt, size_t pckt_length);
 
+// Interupt function
 static void sigint_h();
-
 /*       Private Function       */
+
 
 
 /*
@@ -134,21 +143,25 @@ int main(int argc, char **argv)
                                       rules,
                                       nb_rules,
                                       QUEUE_THRESHOLD,
-                                      put_default_ifa_queue, // TODO
+                                      NULL,
                                       verbose);
    
+   // Init the default queue that receive the packets not matched
+   default_phost_q = new_queue(QUEUE_THRESHOLD, NB_THREADS);
+   default_pa_q = new_queue(QUEUE_THRESHOLD, NB_THREADS);
+
    // We instantiate the pool of threads that will perform the classification
    struct threadpool_t* pool = new_threadpool(NB_THREADS);
    
    // Open interface host stack
-   struct nm_desc *phost = nm_open(host_stack, NULL, 0, NULL);
+   phost = nm_open(host_stack, NULL, 0, NULL);
    if (!phost) {
       D("cannot open %s", host_stack);
       return (1);
    }
    
-   // Open interface and trying to reuse same mmaped region of phost
-   struct nm_desc *pa = nm_open(ifa, NULL, NM_OPEN_NO_MMAP, phost);
+   // Open interface and try to reuse same mmaped region of phost
+   pa = nm_open(ifa, NULL, NM_OPEN_NO_MMAP, phost);
    if (!pa) {
       D("cannot open %s", ifa);
       nm_close(pa);
@@ -208,27 +221,25 @@ int main(int argc, char **argv)
            rx->head, rx->cur, rx->tail);
       }
       
-      // Process the default queues
-      if (default_host_stack_q->size != 0)
-         pckt_from_queue_iface(phost, burst, default_host_stack_q);
-      if (default_iface_q->size != 0)
-         pckt_from_queue_iface(phost, burst, default_iface_q);
+      // Move packet from interface/host stack into the classifier
+      if (pollfd[0].revents & POLLIN)
+         move_pckt_to_classifier(phost, burst, classifier, pool);
+      if (pollfd[1].revents & POLLIN)
+         move_pckt_to_classifier(pa, burst, classifier, pool);
       
       
       // Move packets from the classifier to the interface/host stack
       if (pollfd[0].revents & POLLOUT)
-         pckt_from_queue_iface(phost, burst, DNFC_get_rule_queue(rules[1]));
-      
+         pckt_from_queue_iface(phost, burst, DNFC_get_rule_queue(rules[1]), tagged_pckt_process);
       if (pollfd[1].revents & POLLOUT)
-         pckt_from_queue_iface(pa, burst, DNFC_get_rule_queue(rules[0]));
+         pckt_from_queue_iface(pa, burst, DNFC_get_rule_queue(rules[0]), tagged_pckt_process);
       
       
-      // Move packet from interface/host stack into the classifier
-      if (pollfd[0].revents & POLLIN)
-         move_pckt_to_classifier(phost, burst, classifier, pool);
-
-      if (pollfd[1].revents & POLLIN)
-         move_pckt_to_classifier(pa, burst, classifier, pool);
+      // Process the default queues
+      if (default_phost_q->size != 0)
+         pckt_from_queue_iface(pa, burst, default_phost_q, non_tagged_pckt_process);
+      if (default_pa_q->size != 0)
+         pckt_from_queue_iface(phost, burst, default_pa_q, non_tagged_pckt_process);
    }
    nm_close(phost);
    nm_close(pa);
@@ -239,7 +250,6 @@ int main(int argc, char **argv)
 
 
 /*       Private Function       */
-
 void usage()
 {
    fprintf(stderr,
@@ -322,6 +332,7 @@ static int move_pckt_to_classifier(struct nm_desc *src,
          args->classifier = classifier;
          args->pckt = rxbuf;
          args->pckt_length = rs->len;
+         args->stack = src;
          threadpool_add_work(classify_pool, job_classify, args);
          
          // Next slot in the ring
@@ -336,80 +347,122 @@ static int move_pckt_to_classifier(struct nm_desc *src,
 
 static int pckt_from_queue_iface(struct nm_desc *dst,
                                  uint32_t limit,
-                                 struct queue* queue)
+                                 struct queue* queue,
+                                 (void)(pckt_process)(char**, size_t*, struct queue*))
 {
    struct netmap_ring *txring;
-   uint32_t m = 0;
+   uint32_t m_tot = 0;
    uint32_t di = dst->first_tx_ring;
    
    // Move packets from rule queue
    if(queue) {
       // An atomic read might be necessary for the queue size attribute (depending on the system)
       while (di <= dst->last_tx_ring || queue->size != 0) {
+         
          txring = NETMAP_TXRING(dst->nifp, di);
          if (nm_ring_empty(txring)) {
             di++;
             continue;
          }
-         m += process_queue_to_rings(txring, limit, queue);
+         
+         // Setting cursors to the current positions of the rings
+         uint32_t k = txring->cur; /* TX */
+         uint32_t m = 0;
+         
+         /* print a warning if any of the ring flags is set (e.g. NM_REINIT) */
+         if (txring->flags)
+            D("txflags %x", txring->flags);
+         
+         // Take the smaller ring space (to avoid overflow)
+         m = nm_ring_space(txring);
+         if (m < limit)
+            limit = m;
+         m = limit;
+         
+         // While we still have space on the ring
+         while (limit-- > 0) {
+            struct netmap_slot *ts = &txring->slot[k];
+            
+            /* swap packets */
+            if (ts->buf_idx < 2) {
+               D("wrong index tx[%d] = %d", k, ts->buf_idx);
+               sleep(2);
+            }
+            
+            // Get the buffer to receive it
+            if (ts->len > 2048) {
+               D("wrong len %d tx[%d]", ts->len, k);
+               ts->len = 0;
+            }
+            char* txbuf = NETMAP_BUF(txring, ts->buf_idx);
+            
+            size_t pckt_len;
+            char* pckt;
+            
+            // Get the packet and the length
+            pckt_process(&pckt, &pckt_len, queue);
+            
+            // Copy the packet
+            nm_pkt_copy(pckt, txbuf, pckt_len);
+            
+            // Next slot in the ring
+            k = nm_ring_next(txring, k);
+         }
+         
+         // Advance curent pointer and the head pointer to the last processed slot
+         txring->head = txring->cur = k;
+         m_tot += m;
       }
    }
-   return (m);
+   return (m_tot);
 }
 
 
-static int process_queue_to_rings(struct netmap_ring *txring,
-                                  uint32_t limit,
-                                  struct queue* queue)
+void tagged_pckt_process(char** pckt, size_t* size, struct queue* queue)
 {
-   // Setting cursors to the current positions of the rings
-   uint32_t k = txring->cur; /* TX */
-   uint32_t m = 0;
+   // Pop a packet from the queue
+   struct DNFC_tagged_pckt* txtuple = (struct DNFC_tagged_pckt*)queue_pop(queue);
+   if(!txtuple)
+      return;
+   *pckt = txtuple->pckt->data;
    
-   /* print a warning if any of the ring flags is set (e.g. NM_REINIT) */
-   if (txring->flags)
-      D("txflags %x", txring->flags);
+   // Get the packet length
+   *size = txtuple->pckt->size;
    
-   // Take the smaller ring space (to avoid overflow)
-   m = nm_ring_space(txring);
-   if (m < limit)
-      limit = m;
-   m = limit;
+   /*
+    * This is where you can process matched packets:
+    * The packet is contained in 'txtuple->pckt' which contain the data and the length of the packet
+    * The tag is contained in 'txtuple->tag' which contain a concurent lock free linked list and the
+    * hazardous pointers necessary to manipulate the list.
+    * This grant you the packet that matched the rule and the whole flow context.
+    */
    
-   // While we still have space on the smaller ring
-   while (limit-- > 0) {
-      struct netmap_slot *ts = &txring->slot[k];
-      
-      /* swap packets */
-      if (ts->buf_idx < 2) {
-         D("wrong index tx[%d] = %d", k, ts->buf_idx);
-         sleep(2);
-      }
-      
-      // Pop a packet from the queue
-      struct DNFC_tagged_pckt* txtuple = (struct tuple*)queue_pop(queue);
-      if(!txtuple)
-         return(m);
-      char* pckt = txtuple->pckt->data;
-      
-      // Get the packet length and the buffer to receive it
-      ts->len = txtuple->pckt->size;
-      if (ts->len > 2048) {
-         D("wrong len %d tx[%d]", ts->len, k);
-         ts->len = 0;
-      }
-      char* txbuf = NETMAP_BUF(txring, ts->buf_idx);
-      
-      // Copy the packet
-      nm_pkt_copy(pckt, txbuf, ts->len);
-      
-      // Next slot in the ring
-      k = nm_ring_next(txring, k);
-   }
+   // Free the pckt tuple structure
+   free(txtuple->pckt);
    
-   // Advance curent pointer and the head pointer to the last processed slot
-   txring->head = txring->cur = k;
-   return (m);
+   // Free the tuple structure
+   free(txtuple);
+
+   return;
+}
+
+
+void non_tagged_pckt_process(char** pckt, size_t* size, struct queue* queue)
+{
+   // Pop a packet from the queue
+   struct DNFC_pckt* txtuple = (struct DNFC_tagged_pckt*)queue_pop(queue);
+   if(!txtuple)
+      return;
+   *pckt = txtuple->data;
+   
+   // Get the packet length
+   *size = txtuple->size;
+   
+   /*
+    * This is where you can process not matched packets.
+    */
+   
+   return;
 }
 
 
@@ -431,9 +484,18 @@ int pkt_queued(struct nm_desc *d, int tx)
 
 void* job_classify(void* args)
 {
+   // Classify the packet
    struct args_classification_t* args_cast = (struct args_classification_t*) args;
    if(DNFC_process(args_cast->classifier, args_cast->pckt, args_cast->pckt_length))
       D("A match was found dear!\n");
+   else {
+      // Put the packet in default queue as it does not match any rules
+      struct DNFC_pckt* pckt = chkmalloc(sizeof(*pckt));
+      if(args_cast->stack == pa)
+         queue_push(default_pa_q, pckt);
+      else(args_cast->stack == phost)
+         queue_push(default_phost_q, pckt);
+   }
    return NULL;
 }
 
@@ -443,3 +505,4 @@ static void sigint_h()
    do_abort = 1;
    signal(SIGINT, SIG_DFL);
 }
+/*       Private Function       */

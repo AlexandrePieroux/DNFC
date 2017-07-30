@@ -1,6 +1,7 @@
 #ifndef _PCKT_PASINGH_
 #define _PCKT_PASINGH_
 
+#include <sys/types.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>

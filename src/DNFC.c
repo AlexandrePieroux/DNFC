@@ -24,7 +24,7 @@ key_type get_key(u_char* pckt,
 
 struct DNFC* new_DNFC(size_t nb_threads,
                       struct classifier_rule ***rules,
-                      size_t nb_rules,
+                      uint32_t nb_rules,
                       size_t queue_limit,
                       void (*callback)(u_char*, size_t),
                       bool verbose)
@@ -49,9 +49,10 @@ bool DNFC_process(struct DNFC* classifier,
 {
    // Search for a match in the static classifier
    struct DNFC_action* action = NULL;
-   if(!hypercuts_search(classifier->static_classifier, pckt_len, pckt, (void**)&action))
+   if(!hypercuts_search(classifier->static_classifier, pckt, pckt_len, (void**)&action))
    {
-      classifier->callback(pckt, pckt_len);
+      if(classifier->callback)
+         classifier->callback(pckt, pckt_len);
       return false;
    }
    
@@ -96,7 +97,7 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
 {
    // Prepare to insert the packet in the linked list of packets of the flow
    key_type new_flow_key = get_key(pckt, pckt_len);
-   struct linked_list* pckt_llist = new_linked_list(new_flow_key, new_flow_key, pckt);
+   struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
    
    // Retrieve the list of packets for that flow
    struct DNFC_tag* flow_tag = get_flow(flow_table, pckt);
@@ -170,6 +171,6 @@ key_type get_key(u_char* pckt, size_t pckt_len)
    if(tcph)
       append_bytes(key, tcph->th_seq, 4);
    else
-      append_bytes(key, udph, 8);
+      append_bytes(key, udph, pckt_len);
    return key;
 }

@@ -45,7 +45,7 @@ struct DNFC
 
 struct DNFC* new_DNFC(size_t nb_threads,
                       struct classifier_rule ***rules,
-                      size_t nb_rules,
+                      uint32_t nb_rules,
                       size_t queue_limit,
                       void (*callback)(u_char*, size_t),
                       bool verbose);
