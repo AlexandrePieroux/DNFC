@@ -270,7 +270,7 @@ struct classifier_rule** get_rule_set()
    struct classifier_rule** rules = chkmalloc(sizeof(*rules) * 2);
    
    // First rule
-   rules[0] = chkmalloc(sizeof(rules[0]));
+   rules[0] = chkmalloc(sizeof(*rules[0]));
    
    // Port 80 destination field
    rules[0]->fields = chkmalloc(sizeof(*rules[0]->fields));
@@ -281,7 +281,7 @@ struct classifier_rule** get_rule_set()
    rules[0]->nb_fields = 1;
    
    // Seconde rule
-   rules[1] = chkmalloc(sizeof(rules[1]));
+   rules[1] = chkmalloc(sizeof(*rules[1]));
    
    // Port 80 source field
    rules[1]->fields = chkmalloc(sizeof(*rules[1]->fields));
@@ -289,6 +289,7 @@ struct classifier_rule** get_rule_set()
    rules[1]->fields[0]->mask = 255;
    rules[1]->fields[0]->offset = 288;
    rules[1]->fields[0]->value = 80;
+   rules[1]->nb_fields = 1;
    
    return rules;
 }
