@@ -127,12 +127,11 @@ int main(int argc, char **argv)
             wait_link = atoi(optarg);
             break;
       }
-      
    }
    
    // Branch to the host stack
    char host_buff[64] = {0};
-   snprintf(host_buff, sizeof(host_buff) - 1, "%s^", ifa);
+   snprintf(host_buff, 63, "%s^", ifa);
    char* host_stack = host_buff;
    
    size_t nb_rules = 2;
@@ -257,8 +256,6 @@ void usage()
            "and the host stack\n"
            "    usage(1): deep_packet_inspection [-v] [-i if] [-b burst] "
            "[-w wait_time]\n"
-           "    usage(2): bridge [-v] [-w wait_time] [-L] "
-           "[ifa [ifb [burst]]]\n"
            "\n"
            "    example: deep_packet_inspection -w 10 -i netmap:eth3\n"
            );
