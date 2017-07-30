@@ -493,7 +493,7 @@ void* job_classify(void* args)
       struct DNFC_pckt* pckt = chkmalloc(sizeof(*pckt));
       if(args_cast->stack == pa)
          queue_push(default_pa_q, pckt);
-      else(args_cast->stack == phost)
+      else if(args_cast->stack == phost)
          queue_push(default_phost_q, pckt);
    }
    return NULL;
