@@ -17,7 +17,7 @@
 #define NB_THREADS   64
 #define QUEUE_THRESHOLD   4096
 
-
+typedef unsigned char u_char;
 
 /*        Private variables       */
 // Structure used to store arguments for the classifiction of a packet
@@ -330,7 +330,7 @@ static int move_pckt_to_classifier(struct nm_desc *src,
          // Construct the argument for classification
          struct args_classification_t* args = chkmalloc(sizeof(*args));
          args->classifier = classifier;
-         args->pckt = rxbuf;
+         args->pckt = (u_char*) rxbuf;
          args->pckt_length = rs->len;
          args->stack = src;
          threadpool_add_work(classify_pool, job_classify, args);
@@ -424,7 +424,7 @@ void tagged_pckt_process(char** pckt, size_t* size, struct queue* queue)
    struct DNFC_tagged_pckt* txtuple = (struct DNFC_tagged_pckt*)queue_pop(queue);
    if(!txtuple)
       return;
-   *pckt = txtuple->pckt->data;
+   *pckt = (char*) txtuple->pckt->data;
    
    // Get the packet length
    *size = txtuple->pckt->size;
@@ -453,7 +453,7 @@ void non_tagged_pckt_process(char** pckt, size_t* size, struct queue* queue)
    struct DNFC_pckt* txtuple = (struct DNFC_pckt*)queue_pop(queue);
    if(!txtuple)
       return;
-   *pckt = txtuple->data;
+   *pckt = (char*) txtuple->data;
    
    // Get the packet length
    *size = txtuple->size;

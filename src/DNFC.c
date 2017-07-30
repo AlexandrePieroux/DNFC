@@ -15,8 +15,8 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
                               size_t pckt_len,
                               flow_table* protocol_action);
 
-key_type get_key(u_char* pckt,
-                 size_t pckt_len);
+key_type DNFC_get_key(u_char* pckt,
+                      size_t pckt_len);
 
 /*          Private Functions              */
 
@@ -96,7 +96,7 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
                   flow_table* flow_table)
 {
    // Prepare to insert the packet in the linked list of packets of the flow
-   key_type new_flow_key = get_key(pckt, pckt_len);
+   key_type new_flow_key = DNFC_get_key(pckt, pckt_len);
    struct linked_list* pckt_llist = new_linked_list(new_flow_key, FNV1a_hash(new_flow_key), pckt);
    
    // Retrieve the list of packets for that flow
@@ -131,7 +131,7 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
 
 /*          Parse packet function          */
 
-key_type get_key(u_char* pckt, size_t pckt_len)
+key_type DNFC_get_key(u_char* pckt, size_t pckt_len)
 {
    key_type key = new_byte_stream();
    
