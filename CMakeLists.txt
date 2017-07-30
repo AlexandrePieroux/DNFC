@@ -113,8 +113,7 @@ target_link_libraries (DNFC
                        thread_pool
                        dynamic_classifiers
                        static_classifiers
-                       queue
-                       protocols)
+                       queue)
 
 # Google Tests
 # Download and unpack googletest at configure time
