@@ -10,8 +10,8 @@ extern "C"
 
 #include "gtest/gtest.h"
 
-#define NB_NUMBERS      1000000
-#define NB_THREADS      64
+#define NB_NUMBERS      500000
+#define NB_THREADS      16
 
 struct arguments_t
 {
@@ -61,23 +61,6 @@ TEST (QueueTest, Get)
    
    free_queue(*args[0]->queue);
 }
-
-TEST (QueueTest, Remove)
-{
-   arguments_t** args;
-   threadpool_t* pool = new_threadpool(NB_THREADS);
-   init(args);
-   
-   for (uint32_t i = 0; i < NB_THREADS; ++i)
-      threadpool_add_work(pool, &job_insert, args[i]);
-   for (uint32_t i = 0; i < NB_THREADS; ++i)
-      threadpool_add_work(pool, &job_get, args[i]);
-   threadpool_wait(pool);
-   free_threadpool(pool);
-   
-   free_queue(*args[0]->queue);
-}
-
 
 
 int main(int argc, char **argv)

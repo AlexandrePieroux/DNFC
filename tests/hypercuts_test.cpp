@@ -7,7 +7,7 @@ extern "C" {
 }
 
 #include "gtest/gtest.h"
-#define NB_RULES 25000
+#define NB_RULES 2500
 #define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64
 

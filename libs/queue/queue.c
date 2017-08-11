@@ -16,7 +16,7 @@
 struct queue_item* new_queue_item(void* data);
 
 // Free item function
-void free_item(void* item);
+void free_item(struct queue_item* item);
 
 /*                                     Private function                                               */
 
@@ -38,11 +38,14 @@ struct queue* new_queue(size_t capacity, size_t nb_thread)
 bool queue_push(struct queue* queue, void* data)
 {
    // We check and increment first: to ensure that we do not exceed the queue capacity
-   if(queue->size >= queue->max_size)
-      return false;
-   else
-      fetch_and_inc(&queue->size);
-      
+   for(;;)
+   {
+      if(queue->size >= queue->max_size)
+         return false;
+      if(fetch_and_inc(&queue->size))
+         break;
+   }
+   
    // Get hazardous pointer
    struct queue_item** cur = (struct queue_item**) hp_get(queue->hp, cur_index);
    
@@ -87,12 +90,6 @@ bool queue_push(struct queue* queue, void* data)
 
 void* queue_pop(struct queue* queue)
 {
-   // Check if there are elements in the queue before pop
-   if(queue->size <= 0)
-      return false;
-   else
-      fetch_and_dec(&queue->size);
-      
    // Get hazardous pointers
    struct queue_item** hp_cur = (struct queue_item**) hp_get(queue->hp, cur_index);
    struct queue_item** hp_next = (struct queue_item**) hp_get(queue->hp, next_index);
@@ -118,7 +115,7 @@ void* queue_pop(struct queue* queue)
       if(head != atomic_load_item(&queue->head))
          continue;
       
-      // If there is no next to the head we return (this that we encountered the dummy node)
+      // If there is no next to the head we return (this mean that we encountered the dummy node)
       if(!next)
       {
          *hp_cur = NULL;
@@ -168,7 +165,7 @@ struct queue_item* new_queue_item(void* data)
    return result;
 }
 
-void free_item(void* item)
+void free_item(struct queue_item* item)
 {
-   free((struct queue_item*)item);
+   free(item);
 }
