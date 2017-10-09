@@ -10,8 +10,11 @@ extern "C"
 
 #include "gtest/gtest.h"
 
-#define NB_NUMBERS      100000
-#define NB_THREADS      64
+#define RANGE_NUMBERS   100000
+#define RANGE_THREADS   64
+
+int nb_numbers;
+int nb_threads;
 
 struct arguments_t
 {
@@ -34,28 +37,39 @@ void init(arguments_t** &args);
 
 TEST (LinkedListTest, Insert)
 {
-  arguments_t** args;
-  threadpool_t* pool = new_threadpool(NB_THREADS);
-  init(args);
-  for (uint32_t i = 0; i < NB_THREADS; ++i)
-    threadpool_add_work(pool, &job_insert, args[i]);
-  threadpool_wait(pool);
-  free_threadpool(pool);
-
-  linked_list_free(args[0]->table);
+   
+   arguments_t** args;
+   threadpool_t* pool = new_threadpool(RANGE_THREADS);
+   
+   int steps_thread = RANGE_THREADS/2;
+   int steps_number = RANGE_NUMBERS/5;
+   
+   for(nb_threads = 1; nb_threads <= RANGE_THREADS; nb_threads+=steps_thread)
+   {
+      for(nb_numbers = 1; nb_numbers <= RANGE_NUMBERS; nb_numbers+=steps_number)
+      {
+         std::cout << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers << std::endl;
+         init(args);
+         for (uint32_t i = 0; i < nb_threads; ++i)
+            threadpool_add_work(pool, &job_insert, args[i]);
+         threadpool_wait(pool);
+         linked_list_free(args[0]->table);
+      }
+   }
+   free_threadpool(pool);
 }
 
 TEST (LinkedListTest, Get)
 {
   arguments_t** args;
-  threadpool_t* pool = new_threadpool(NB_THREADS);
+  threadpool_t* pool = new_threadpool(nb_threads);
   init(args);
 
-  for (uint32_t i = 0; i < NB_THREADS; ++i)
+  for (uint32_t i = 0; i < nb_threads; ++i)
     threadpool_add_work(pool, &job_insert, args[i]);
   threadpool_wait(pool);
 
-  for (uint32_t i = 0; i < NB_THREADS; ++i)
+  for (uint32_t i = 0; i < nb_threads; ++i)
     threadpool_add_work(pool, &job_get, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
@@ -66,14 +80,14 @@ TEST (LinkedListTest, Get)
 TEST (LinkedListTest, Remove)
 {
   arguments_t** args;
-  threadpool_t* pool = new_threadpool(NB_THREADS);
+  threadpool_t* pool = new_threadpool(nb_threads);
   init(args);
 
-  for (uint32_t i = 0; i < NB_THREADS; ++i)
+  for (uint32_t i = 0; i < nb_threads; ++i)
     threadpool_add_work(pool, &job_insert, args[i]);
   threadpool_wait(pool);
 
-  for (uint32_t i = 0; i < NB_THREADS; ++i)
+  for (uint32_t i = 0; i < nb_threads; ++i)
     threadpool_add_work(pool, &job_remove, args[i]);
   threadpool_wait(pool);
   free_threadpool(pool);
@@ -81,12 +95,28 @@ TEST (LinkedListTest, Remove)
   linked_list_free(args[0]->table);
 }
 
+TEST (LinkedListTest, ConcurrentUpdates)
+{
+   arguments_t** args;
+   threadpool_t* pool = new_threadpool(nb_threads);
+   init(args);
+   
+   for (uint32_t i = 0; i < nb_threads; ++i)
+   {
+      threadpool_add_work(pool, &job_insert, args[i]);
+      threadpool_add_work(pool, &job_get, args[i]);
+      threadpool_add_work(pool, &job_remove, args[i]);
+   }
+   threadpool_wait(pool);
+   free_threadpool(pool);
+}
+
 
 
 int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+   ::testing::InitGoogleTest(&argc, argv);
+   return RUN_ALL_TESTS();
 }
 
 
@@ -115,28 +145,28 @@ void init(arguments_t** &args)
 {
   // Init phase
   srand(time(NULL));
-  key_type* numbers = get_random_numbers(NB_NUMBERS);
+  key_type* numbers = get_random_numbers(nb_numbers);
 
   // Preparing the structure
-  args = new arguments_t*[NB_THREADS];
-  struct hazard_pointer* hp = linked_list_init(NB_THREADS);
+  args = new arguments_t*[nb_threads];
+  struct hazard_pointer* hp = linked_list_init(nb_threads);
   linked_list** table = new linked_list*;
   *table = new_linked_list(0,0,NULL);
 
   // We distribute the work per threads
-  uint32_t divider = NB_NUMBERS / NB_THREADS;
-  uint32_t remain = NB_NUMBERS % NB_THREADS;
-  uint32_t* indexes = new uint32_t[NB_NUMBERS];
-  for (uint32_t i = 0; i < NB_NUMBERS; i++)
+  uint32_t divider = nb_numbers / nb_threads;
+  uint32_t remain = nb_numbers % nb_threads;
+  uint32_t* indexes = new uint32_t[nb_numbers];
+  for (uint32_t i = 0; i < nb_numbers; i++)
    indexes[i] = i;
    
-  for (uint32_t p = 0; p < NB_THREADS; ++p)
+  for (uint32_t p = 0; p < nb_threads; ++p)
   {
     args[p] = new arguments_t;
     args[p]->numbers = &(numbers[p * divider]);
     args[p]->index = &(indexes[p * divider]);
      
-    if(p != (NB_THREADS - 1))
+    if(p != (nb_threads - 1))
       args[p]->size = divider;
     else
       args[p]->size = divider + remain;

@@ -62,6 +62,8 @@ struct job* job_queue_pull(struct job_queue* queue)
 
       if(queue->head)
          notify_jobs(queue);
+      else
+         queue->tail = NULL;
    }
    pthread_mutex_unlock(&(queue->lock));
    return job;
