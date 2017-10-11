@@ -3,6 +3,8 @@ project (DNFC)
 
 find_package(Threads REQUIRED)
 
+set (CMAKE_CXX_STANDARD 11)
+
 # Libraries
 set (MEMORY_MANAGEMENT
 		 libs/memory_management/memory_management.c

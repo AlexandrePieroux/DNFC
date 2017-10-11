@@ -1,6 +1,7 @@
 #define _BSD_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <chrono>
 
 extern "C"
 {
@@ -10,8 +11,11 @@ extern "C"
 
 #include "gtest/gtest.h"
 
-#define RANGE_NUMBERS   100000
-#define RANGE_THREADS   64
+#define RANGE_NUMBERS      100000
+#define NB_STEPS_NUMBERS   10
+
+#define RANGE_THREADS      64
+#define NB_STEPS_THREADS   4
 
 int nb_numbers;
 int nb_threads;
@@ -23,92 +27,63 @@ struct arguments_t
   uint32_t size;
   linked_list** table;
   struct hazard_pointer* hp;
+  bool active_comparison;
 };
 
 
-
+void test_iterations(void (fun)(threadpool_t*, arguments_t**));
 key_type* get_random_numbers(uint32_t size);
 void* job_insert(void* args);
 void* job_get(void* args);
 void* job_remove(void* args);
-void init(arguments_t** &args);
-
+void init(arguments_t** &args, bool active_comparison);
 
 
 TEST (LinkedListTest, Insert)
 {
-   
-   arguments_t** args;
-   threadpool_t* pool = new_threadpool(RANGE_THREADS);
-   
-   int steps_thread = RANGE_THREADS/2;
-   int steps_number = RANGE_NUMBERS/5;
-   
-   for(nb_threads = 1; nb_threads <= RANGE_THREADS; nb_threads+=steps_thread)
-   {
-      for(nb_numbers = 1; nb_numbers <= RANGE_NUMBERS; nb_numbers+=steps_number)
-      {
-         std::cout << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers << std::endl;
-         init(args);
-         for (uint32_t i = 0; i < nb_threads; ++i)
-            threadpool_add_work(pool, &job_insert, args[i]);
-         threadpool_wait(pool);
-         linked_list_free(args[0]->table);
-      }
-   }
-   free_threadpool(pool);
+   test_iterations([](threadpool_t* pool, arguments_t** args){
+      for (uint32_t i = 0; i < nb_threads; ++i)
+         threadpool_add_work(pool, &job_insert, args[i]);
+      threadpool_wait(pool);
+   });
 }
 
 TEST (LinkedListTest, Get)
 {
-  arguments_t** args;
-  threadpool_t* pool = new_threadpool(nb_threads);
-  init(args);
-
-  for (uint32_t i = 0; i < nb_threads; ++i)
-    threadpool_add_work(pool, &job_insert, args[i]);
-  threadpool_wait(pool);
-
-  for (uint32_t i = 0; i < nb_threads; ++i)
-    threadpool_add_work(pool, &job_get, args[i]);
-  threadpool_wait(pool);
-  free_threadpool(pool);
-
-  linked_list_free(args[0]->table);
+   test_iterations([](threadpool_t* pool, arguments_t** args){
+      for (uint32_t i = 0; i < nb_threads; ++i)
+         threadpool_add_work(pool, &job_insert, args[i]);
+      threadpool_wait(pool);
+      
+      for (uint32_t i = 0; i < nb_threads; ++i)
+         threadpool_add_work(pool, &job_get, args[i]);
+      threadpool_wait(pool);
+   });
 }
 
 TEST (LinkedListTest, Remove)
 {
-  arguments_t** args;
-  threadpool_t* pool = new_threadpool(nb_threads);
-  init(args);
-
-  for (uint32_t i = 0; i < nb_threads; ++i)
-    threadpool_add_work(pool, &job_insert, args[i]);
-  threadpool_wait(pool);
-
-  for (uint32_t i = 0; i < nb_threads; ++i)
-    threadpool_add_work(pool, &job_remove, args[i]);
-  threadpool_wait(pool);
-  free_threadpool(pool);
-
-  linked_list_free(args[0]->table);
+   test_iterations([](threadpool_t* pool, arguments_t** args){
+      for (uint32_t i = 0; i < nb_threads; ++i)
+         threadpool_add_work(pool, &job_insert, args[i]);
+      threadpool_wait(pool);
+      
+      for (uint32_t i = 0; i < nb_threads; ++i)
+         threadpool_add_work(pool, &job_remove, args[i]);
+      threadpool_wait(pool);
+   });
 }
 
 TEST (LinkedListTest, ConcurrentUpdates)
 {
-   arguments_t** args;
-   threadpool_t* pool = new_threadpool(nb_threads);
-   init(args);
-   
-   for (uint32_t i = 0; i < nb_threads; ++i)
-   {
-      threadpool_add_work(pool, &job_insert, args[i]);
-      threadpool_add_work(pool, &job_get, args[i]);
-      threadpool_add_work(pool, &job_remove, args[i]);
-   }
-   threadpool_wait(pool);
-   free_threadpool(pool);
+   test_iterations([](threadpool_t* pool, arguments_t** args){
+      for (uint32_t i = 0; i < nb_threads; ++i)
+      {
+         threadpool_add_work(pool, &job_insert, args[i]);
+         threadpool_add_work(pool, &job_get, args[i]);
+         threadpool_add_work(pool, &job_remove, args[i]);
+      }
+   });
 }
 
 
@@ -141,7 +116,37 @@ key_type* get_random_numbers(uint32_t size)
 
 
 
-void init(arguments_t** &args)
+void test_iterations(void (fun)(threadpool_t*, arguments_t**))
+{
+   arguments_t** args;
+   threadpool_t* pool = new_threadpool(RANGE_THREADS);
+   
+   int steps_thread = RANGE_THREADS/NB_STEPS_THREADS;
+   int steps_number = RANGE_NUMBERS/NB_STEPS_NUMBERS;
+   
+   for(nb_threads = steps_thread; nb_threads <= RANGE_THREADS; nb_threads+=steps_thread)
+   {
+      for(nb_numbers = steps_number; nb_numbers <= RANGE_NUMBERS; nb_numbers+=steps_number)
+      {
+         std::cout << "[ ITERATION] " << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers;
+         init(args, true);
+         
+         auto start = std::chrono::high_resolution_clock::now();
+         fun(pool, args);
+         auto end = std::chrono::high_resolution_clock::now();
+         std::chrono::duration<double> elapsed = end - start;
+         
+         std::cout << " - " << elapsed.count() << " s" << std::endl;
+         linked_list_free(args[0]->table);
+         free_hp(args[0]->hp);
+      }
+   }
+   free_threadpool(pool);
+}
+
+
+
+void init(arguments_t** &args, bool active_comparison)
 {
   // Init phase
   srand(time(NULL));
@@ -171,7 +176,8 @@ void init(arguments_t** &args)
     else
       args[p]->size = divider + remain;
     args[p]->table = table;
-     args[p]->hp = hp;
+    args[p]->hp = hp;
+    args[p]->active_comparison = active_comparison;
   }
 }
 
@@ -183,7 +189,9 @@ void* job_insert(void* args)
   for (uint32_t i = 0; i < args_cast->size; ++i)
   {
     linked_list* item = new_linked_list(args_cast->numbers[i], args_cast->index[i], &args_cast->numbers[i]);
-    EXPECT_EQ(linked_list_insert(args_cast->hp, args_cast->table, item), item);
+    linked_list* result = linked_list_insert(args_cast->hp, args_cast->table, item);
+    if(args_cast->active_comparison)
+       EXPECT_EQ(result, item);
   }
   return NULL;
 }
@@ -197,7 +205,7 @@ void* job_get(void* args)
   for (uint32_t i = 0; i < args_cast->size; ++i)
   {
     item = linked_list_get(args_cast->hp, args_cast->table, args_cast->numbers[i], args_cast->index[i]);
-    if(item)
+    if(args_cast->active_comparison)
        EXPECT_EQ(item->key, args_cast->numbers[i]);
   }
   return NULL;
@@ -209,6 +217,10 @@ void* job_remove(void* args)
 {
   arguments_t* args_cast = (arguments_t*)args;
   for(uint32_t i = 0; i < args_cast->size; ++i)
-     EXPECT_TRUE(linked_list_delete(args_cast->hp, args_cast->table, args_cast->numbers[i], args_cast->index[i]));
+  {
+     bool result = linked_list_delete(args_cast->hp, args_cast->table, args_cast->numbers[i], args_cast->index[i]);
+     if(args_cast->active_comparison)
+        EXPECT_TRUE(result);
+  }
   return NULL;
 }

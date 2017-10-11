@@ -86,6 +86,10 @@ void free_hp(struct hazard_pointer* hp)
    free(hp->dlist);
    uint32_t error = pthread_key_delete(dcount_k);
    error = pthread_key_delete(id_k);
+
+   dcount_k = NULL;
+   id_k = NULL;
+   
    free(hp);
 }
 
