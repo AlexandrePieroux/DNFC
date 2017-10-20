@@ -8,16 +8,27 @@
 #include <pthread.h>
 #include "../memory_management/memory_management.h"
 
-struct hazard_pointer{
-   void** hp;
-   void** dlist;
-   size_t size;
-   size_t nb_threads;
-   size_t subscribed_threads;
-   void (*free_node)(void*);
+struct node_ll{
+   void* data;
+   struct node_ll* next;
 };
 
-struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (*free_node)(void*));
+struct hazard_pointer_record{
+   bool active;
+   struct hazard_pointer_record* next;
+   void** hp;
+   struct node_ll* r_list;
+   int32_t r_count;
+};
+
+struct hazard_pointer{
+   size_t nb_pointers;
+   struct hazard_pointer_record* head;
+   void (*free_node)(void*);
+   uint32_t h;
+};
+
+struct hazard_pointer* new_hazard_pointer(void (*free_node)(void*), uint32_t nb_pointers);
 
 void** hp_get(struct hazard_pointer* hp, uint32_t index);
 

@@ -2,23 +2,28 @@
 
 #define atomic_compare_and_swap(t,old,new) __sync_bool_compare_and_swap (t, old, new)
 #define atomic_load(p) ({uint32_t* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
+#define batch_size(hp) ((hp->h * hp->nb_pointers * 2) + hp->h)
 
 
 /*                Private function                     */
 
-// Retreive a thread context variable denoted by 'dcount'.
-uint32_t* get_dcount(void);
+// Allocate a new hazard pointer record
+struct hazard_pointer_record* new_hp_record(struct hazard_pointer* hp);
 
-// Retreive a thread context variable denoted by 'id'.
-uint32_t* get_id(struct hazard_pointer* hp);
+// Retreive the TLS variable denoted by 'my_hp_record.
+struct hazard_pointer_record* get_my_hp_record(void);
 
-// Retreive a thread context variable denoted by 'dlist'.
-void** get_dlist(struct hazard_pointer* dlist, size_t size);
-
+// Subscribe to the structure to perform a task
 uint32_t hp_subscribe(struct hazard_pointer* hp);
+
+// Unubscribe to the structure after having performed a task
+uint32_t hp_unsubscribe(struct hazard_pointer* hp);
 
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
+
+// Helper scan function performed after a scan
+void hp_help_scan(struct hazard_pointer* hp);
 
 // Compare function for qs
 int cmpfunc (const void* a, const void* b);
@@ -34,22 +39,19 @@ void smr_make_keys(void);
 
 
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
-static pthread_key_t id_k;
-static pthread_key_t dcount_k;
+static pthread_key_t my_hp_record;
 
 
 
-struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (*free_node)(void*))
+struct hazard_pointer* new_hazard_pointer(void (*free_node)(void*), uint32_t nb_pointers)
 {
    // Allocate the structure and the basic data
    struct hazard_pointer* result = chkmalloc(sizeof(*result));
-   result->hp = chkmalloc(sizeof(*result->hp) * nb_threads * size);
-   result->dlist = chkcalloc(nb_threads, sizeof(*result->dlist));
-   result->nb_threads = nb_threads;
-   result->size = size;
-   result->subscribed_threads = 0;
    result->free_node = free_node;
-   
+   result->nb_pointers = nb_pointers;
+   result->h = 0;
+   result->head = new_hp_record(result);
+
    pthread_once(&key_once, smr_make_keys);
    return result;
 }
@@ -58,10 +60,8 @@ struct hazard_pointer* new_hazard_pointer(size_t size, size_t nb_threads, void (
 
 void** hp_get(struct hazard_pointer* hp, uint32_t index)
 {
-   uint32_t thread_id = *get_id(hp);
-   index %= hp->size;
-   uint32_t pointer_id = (thread_id - 1) * hp->size + index;
-   return &hp->hp[pointer_id];
+   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   return &my_hp_record->hp[index];
 }
 
 
@@ -82,14 +82,21 @@ void hp_delete_node(struct hazard_pointer* hp, void* node)
 // Be sure that the nodes contained in the pointers are all freed
 void free_hp(struct hazard_pointer* hp)
 {
-   free(hp->hp);
-   free(hp->dlist);
-   uint32_t error = pthread_key_delete(dcount_k);
-   error = pthread_key_delete(id_k);
-
-   dcount_k = NULL;
-   id_k = NULL;
-   
+   struct hazard_pointer_record* tmp = hp->head;
+   while(tmp)
+   {
+      struct node_ll* node_tmp = tmp->r_list;
+      while(node_tmp)
+      {
+         hp->free_node(node_tmp->data);
+         struct node_ll* next_tmp = node_tmp->next;
+         free(node_tmp);
+         node_tmp = next_tmp;
+      }
+      struct hazard_pointer_record* record_tmp = tmp->next;
+      free(tmp);
+      tmp = record_tmp;
+   }
    free(hp);
 }
 
@@ -97,15 +104,24 @@ void free_hp(struct hazard_pointer* hp)
 
 /*                Private function                     */
 
-uint32_t* get_dcount(void)
+struct hazard_pointer_record* new_hp_record(struct hazard_pointer* hp)
 {
-   void* dcount = pthread_getspecific(dcount_k);
-   if(!dcount)
+   struct hazard_pointer_record* result = chkmalloc(sizeof(*result));
+   result->hp = chkmalloc(sizeof(result->hp) * hp->nb_pointers);
+   result->r_list = chkmalloc(sizeof(result->r_list));
+   result->r_list->next = NULL;
+   return result;
+}
+
+struct hazard_pointer_record* get_my_hp_record(void)
+{
+   void* hp_record = pthread_getspecific(my_hp_record);
+   if(!hp_record)
    {
-      dcount = chkcalloc(1, sizeof *dcount);
-      pthread_setspecific(dcount_k, dcount);
+      hp_record = chkcalloc(1, sizeof *hp_record);
+      pthread_setspecific(my_hp_record, hp_record);
    }
-   return (uint32_t*) dcount;
+   return (struct hazard_pointer_record*) hp_record;
 }
 
 uint32_t* get_id(struct hazard_pointer* hp)
@@ -134,7 +150,7 @@ void** get_dlist(struct hazard_pointer* hp, size_t size)
 
 uint32_t hp_subscribe(struct hazard_pointer* hp)
 {
-   // Subscribe and get an id
+   // Subscribe and get an id if possible
    uint32_t id;
    uint32_t next_id;
    for(;;)
@@ -147,6 +163,11 @@ uint32_t hp_subscribe(struct hazard_pointer* hp)
          break;
    }
    return next_id;
+}
+
+uint32_t hp_unsubscribe(struct hazard_pointer* hp)
+{
+   
 }
       
 void hp_scan(struct hazard_pointer* hp)
@@ -191,6 +212,11 @@ void hp_scan(struct hazard_pointer* hp)
    free(new_dlist);
 }
 
+void hp_help_scan(struct hazard_pointer* hp)
+{
+   
+}
+
 int cmpfunc (const void* a, const void* b)
 {
    return (*(void**)a - *(void**)b);
@@ -219,8 +245,7 @@ int binary_search(void** arr, int l, int r, int x)
 
 void smr_make_keys(void)
 {
-   pthread_key_create(&id_k, NULL);
-   pthread_key_create(&dcount_k, NULL);
+   pthread_key_create(&my_hp_record, NULL);
 }
 
 /*                Private function                     */
