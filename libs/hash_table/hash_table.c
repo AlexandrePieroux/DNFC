@@ -7,17 +7,11 @@
 
   /*                    Private macro                       */
 
-  // Atomic load list
-  #define atomic_load_list(p) ({struct linked_list* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
+  #define atomic_load_list(p) __atomic_load_n(p, __ATOMIC_RELAXED)
+  #define atomic_compare_and_swap(t,old,new) __atomic_compare_exchange_n(t, old, new, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
 
-  // Atomic compare and swap
-  #define atomic_compare_and_swap(t,old,new) __sync_bool_compare_and_swap (t, old, new)
-
-  // Atomicaly fetch and increase the value of a given number
-  #define fetch_and_inc(n) __sync_fetch_and_add (n, 1)
-
-  // Atomicaly fetch and decrease the value of a given number
-  #define fetch_and_dec(n) __sync_fetch_and_sub (n, 1)
+  #define fetch_and_inc(n) __atomic_fetch_add(n, 1, __ATOMIC_RELAXED)
+  #define fetch_and_dec(n) __atomic_fetch_sub(n, 1, __ATOMIC_RELAXED)
 
   // Lookup table for bits reversal
   #define R2(n)     n,     n + 2*64,     n + 1*64,     n + 3*64
@@ -110,7 +104,7 @@
      uint32_t csize = pow_2(table->size + 1) - 1;
      uint32_t cbsize = table->size;
      if((fetch_and_inc(&table->nb_elements) / csize) > THRESHOLD)
-        atomic_compare_and_swap(&table->size, cbsize, cbsize + 1);
+        atomic_compare_and_swap(&table->size, &cbsize, cbsize + 1);
      return true;
   }
 
@@ -211,7 +205,8 @@
      if (!table->index[segment_index])
      {
        struct linked_list** segment = chkcalloc(segment_size, sizeof **segment);
-       if(!atomic_compare_and_swap(&table->index[segment_index], NULL, segment))
+       void* null_ptr = NULL;
+       if(!atomic_compare_and_swap(&table->index[segment_index], null_ptr, segment))
            free(segment);
      }
      table->index[segment_index][hash % segment_size] = head;

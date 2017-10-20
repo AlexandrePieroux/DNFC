@@ -1,11 +1,11 @@
 #include "queue.h"
 
 // Atomic actions macros
-#define atomic_compare_and_swap(t,old,new) __sync_bool_compare_and_swap (t, old, new)
-#define atomic_load_item(p) ({struct queue_item* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
+#define atomic_compare_and_swap(t,old,new) __atomic_compare_exchange_n(t, old, new, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
+#define atomic_load_list(p) __atomic_load_n(p, __ATOMIC_RELAXED)
 
-#define fetch_and_inc(n) __sync_fetch_and_add (n, 1)
-#define fetch_and_dec(n) __sync_fetch_and_sub (n, 1)
+#define fetch_and_inc(n) __atomic_fetch_add(n, 1, __ATOMIC_RELAXED)
+#define fetch_and_dec(n) __atomic_fetch_sub(n, 1, __ATOMIC_RELAXED)
 
 #define cur_index 0
 #define next_index 1
@@ -74,16 +74,17 @@ bool queue_push(struct queue* queue, void* data)
       // If next is not null we advance the pointer of the tail to the next node
       if(next)
       {
-         atomic_compare_and_swap(&queue->tail, tail, next);
+         atomic_compare_and_swap(&queue->tail, &tail, next);
          continue;
       }
       
       // Try to effectively push the new node
-      if(atomic_compare_and_swap(&tail->next, NULL, node))
+      void* null_ptr = NULL;
+      if(atomic_compare_and_swap(&tail->next, null_ptr, node))
          break;
    }
    // Set the tail to the new node
-   atomic_compare_and_swap(&queue->tail, tail, node);
+   atomic_compare_and_swap(&queue->tail, &tail, node);
    *cur = NULL;
    return true;
 }
@@ -125,13 +126,13 @@ void* queue_pop(struct queue* queue)
       // If the head is also the tail we advance the pointer of the tail to 'next'
       if(head == tail)
       {
-         atomic_compare_and_swap(&queue->tail, tail, next);
+         atomic_compare_and_swap(&queue->tail, &tail, next);
          continue;
       }
       
       // Get the data and set the head to the next
       result = next->data;
-      if(atomic_compare_and_swap(&queue->head, head, next))
+      if(atomic_compare_and_swap(&queue->head, &head, next))
          break;
    }
    

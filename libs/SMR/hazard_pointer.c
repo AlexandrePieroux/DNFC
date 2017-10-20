@@ -1,7 +1,7 @@
 #include "hazard_pointer.h"
 
-#define atomic_compare_and_swap(t,old,new) __sync_bool_compare_and_swap (t, old, new)
-#define atomic_load(p) ({uint32_t* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
+#define atomic_tas(t) __atomic_test_and_set(t, __ATOMIC_RELAXED)
+
 #define batch_size(hp) ((hp->h * hp->nb_pointers * 2) + hp->h)
 
 
@@ -14,10 +14,10 @@ struct hazard_pointer_record* new_hp_record(struct hazard_pointer* hp);
 struct hazard_pointer_record* get_my_hp_record(void);
 
 // Subscribe to the structure to perform a task
-uint32_t hp_subscribe(struct hazard_pointer* hp);
+void hp_subscribe(struct hazard_pointer* hp);
 
 // Unubscribe to the structure after having performed a task
-uint32_t hp_unsubscribe(struct hazard_pointer* hp);
+void hp_unsubscribe(struct hazard_pointer* hp);
 
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
@@ -54,6 +54,36 @@ struct hazard_pointer* new_hazard_pointer(void (*free_node)(void*), uint32_t nb_
 
    pthread_once(&key_once, smr_make_keys);
    return result;
+}
+
+
+
+void hp_subscribe(struct hazard_pointer* hp)
+{
+   // Retrive TLS variable 'my_hp_record'
+   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   
+   // First try to reuse a retire HP record
+   for(struct hazard_pointer_record* i = hp->head ; i; i = i->next)
+   {
+      if(i->active)
+         continue;
+      if(atomic_tas(&i->active))
+         continue;
+      
+      // Sucessfully locked one record
+      my_hp_record = i;
+   }
+   
+   // No HP records available for reuse
+   
+}
+
+
+
+void hp_unsubscribe(struct hazard_pointer* hp)
+{
+   
 }
 
 
@@ -122,52 +152,6 @@ struct hazard_pointer_record* get_my_hp_record(void)
       pthread_setspecific(my_hp_record, hp_record);
    }
    return (struct hazard_pointer_record*) hp_record;
-}
-
-uint32_t* get_id(struct hazard_pointer* hp)
-{
-   void* id = pthread_getspecific(id_k);
-   if(!id)
-   {
-      id = chkcalloc(1, sizeof *id);
-      pthread_setspecific(id_k, id);
-      *(uint32_t*)id = hp_subscribe(hp);
-   }
-   return (uint32_t*) id;
-}
-
-void** get_dlist(struct hazard_pointer* hp, size_t size)
-{
-   uint32_t* id = get_id(hp);
-   void** dlist = hp->dlist[*id];
-   if(!dlist)
-   {
-      void** dlist_p = chkcalloc(size, sizeof *dlist_p);
-      hp->dlist[*id] = dlist_p;
-   }
-   return hp->dlist[*id];
-}
-
-uint32_t hp_subscribe(struct hazard_pointer* hp)
-{
-   // Subscribe and get an id if possible
-   uint32_t id;
-   uint32_t next_id;
-   for(;;)
-   {
-      id = atomic_load(&hp->subscribed_threads);
-      next_id = id + 1;
-      if(id >= (uint32_t)atomic_load(&hp->nb_threads))
-         return false;
-      if(atomic_compare_and_swap(&hp->subscribed_threads, id, next_id))
-         break;
-   }
-   return next_id;
-}
-
-uint32_t hp_unsubscribe(struct hazard_pointer* hp)
-{
-   
 }
       
 void hp_scan(struct hazard_pointer* hp)

@@ -1,8 +1,8 @@
 #include "linked_list.h"
 
-#define atomic_compare_and_swap(t,old,new) __sync_bool_compare_and_swap (t, old, new)
-#define atomic_load_list(p) ({struct linked_list* __tmp = *(p); __builtin_ia32_lfence (); __tmp;})
-#define store_barrier __builtin_ia32_sfence
+#define atomic_compare_and_swap(t,old,new) __atomic_compare_exchange_n(t, old, new, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
+#define atomic_load_list(p) __atomic_load_n(p, __ATOMIC_RELAXED)
+#define store_barrier __atomic_thread_fence(__ATOMIC_RELAXED)
 
 #define NB_HP         3
 
@@ -56,7 +56,7 @@ static pthread_key_t prev;
 
 struct hazard_pointer* linked_list_init(uint32_t nb_threads)
 {
-   struct hazard_pointer* res = new_hazard_pointer(NB_HP, nb_threads, (void(*)(void*))delete_node);
+   struct hazard_pointer* res = new_hazard_pointer(NB_HP, (void(*)(void*))delete_node);
    pthread_once(&key_once, make_keys);
    return res;
 }
@@ -97,7 +97,7 @@ struct linked_list* linked_list_insert(
    
    struct linked_list* result;
    
-   store_barrier();
+   store_barrier;
    for(;;)
    {
       if(linked_list_find(hp, list, key, hash))
@@ -106,7 +106,9 @@ struct linked_list* linked_list_insert(
          break;
       }
       item->next = *cur_p;
-      if(atomic_compare_and_swap(&(*prev_p)->next, get_list_pointer(*cur_p), item))
+      
+      struct linked_list* cur_p_list = get_list_pointer(*cur_p);
+      if(atomic_compare_and_swap(&(*prev_p)->next, &cur_p_list, item))
       {
          result = item;
          break;
@@ -179,9 +181,11 @@ bool linked_list_delete(
       }
 
       next = atomic_load_list(&(*cur_p)->next);
-      if(!atomic_compare_and_swap(&(*cur_p)->next, next, mark_pointer(next, 1)))
+      if(!atomic_compare_and_swap(&(*cur_p)->next, &next, mark_pointer(next, 1)))
          continue;
-      if(atomic_compare_and_swap(&(*prev_p)->next, get_list_pointer(*cur_p), get_list_pointer(next)))
+      
+      struct linked_list* cur_p_list = get_list_pointer(*cur_p);
+      if(atomic_compare_and_swap(&(*prev_p)->next, &cur_p_list, get_list_pointer(next)))
          hp_delete_node(hp, get_list_pointer(*cur_p));
       else
          linked_list_find(hp, list, key, hash);
@@ -268,7 +272,7 @@ bool linked_list_find(
             *prev_p = *cur_p;
             *prev_hp = *cur_p;
          } else {
-            if(atomic_compare_and_swap(&(*prev_p)->next, *cur_p, get_list_pointer(next_p)))
+            if(atomic_compare_and_swap(&(*prev_p)->next, cur_p, get_list_pointer(next_p)))
                hp_delete_node(hp, get_list_pointer(*cur_p));
             else
                break;
