@@ -1,8 +1,11 @@
 #include "hazard_pointer.h"
 
 #define atomic_tas(t) __atomic_test_and_set(t, __ATOMIC_RELAXED)
+#define fetch_and_add(n, v) __atomic_fetch_add(n, v, __ATOMIC_RELAXED)
+#define atomic_compare_and_swap(t,old,new) __atomic_compare_exchange_n(t, old, new, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
+#define atomic_load(p) __atomic_load_n(p, __ATOMIC_RELAXED)
 
-#define batch_size(hp) ((hp->h * hp->nb_pointers * 2) + hp->h)
+#define batch_size(hp) ((atomic_load(&hp->h) * hp->nb_pointers * 2) + atomic_load(&hp->h))
 
 
 /*                Private function                     */
@@ -13,11 +16,8 @@ struct hazard_pointer_record* new_hp_record(struct hazard_pointer* hp);
 // Retreive the TLS variable denoted by 'my_hp_record.
 struct hazard_pointer_record* get_my_hp_record(void);
 
-// Subscribe to the structure to perform a task
-void hp_subscribe(struct hazard_pointer* hp);
-
-// Unubscribe to the structure after having performed a task
-void hp_unsubscribe(struct hazard_pointer* hp);
+//
+void hp_push(struct hazard_pointer_record* record, void* node);
 
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
@@ -29,7 +29,7 @@ void hp_help_scan(struct hazard_pointer* hp);
 int cmpfunc (const void* a, const void* b);
 
 // Binary search
-int binary_search(void** arr, int l, int r, int x);
+int binary_search(struct node_ll** arr, int l, int r, int x);
 
 // Create pthread keys
 void smr_make_keys(void);
@@ -71,19 +71,39 @@ void hp_subscribe(struct hazard_pointer* hp)
       if(atomic_tas(&i->active))
          continue;
       
-      // Sucessfully locked one record
+      // Sucessfully locked one record to use
       my_hp_record = i;
+      return;
    }
    
    // No HP records available for reuse
+   while(!fetch_and_add(&hp->h, hp->nb_pointers));
    
+   // Allocate and push a new record
+   my_hp_record = new_hp_record(hp);
+   my_hp_record->active = true;
+   struct hazard_pointer_record* oldhead = atomic_load(&hp->head);
+
+   // Add the new record to the list
+   for(;;)
+   {
+      my_hp_record->next = hp->head;
+      if(atomic_compare_and_swap(&hp->head, &oldhead, my_hp_record))
+         break;
+      oldhead = atomic_load(&hp->head);
+   }
 }
 
 
 
 void hp_unsubscribe(struct hazard_pointer* hp)
 {
-   
+   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   for(uint32_t i = 0; i < hp->nb_pointers; i++)
+   {
+      my_hp_record->hp[i] = NULL;
+   }
+   my_hp_record->hp = false;
 }
 
 
@@ -98,13 +118,15 @@ void** hp_get(struct hazard_pointer* hp, uint32_t index)
 
 void hp_delete_node(struct hazard_pointer* hp, void* node)
 {
-   size_t batch_size = hp->nb_threads * hp->size * 2;
-   void** dlist = get_dlist(hp, batch_size);
-   uint32_t* dcount = get_dcount();
-   dlist[*dcount] = node;
-   (*dcount)++;
-   if(*dcount == batch_size)
+   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   hp_push(my_hp_record, node);
+   my_hp_record->r_count++;
+   
+   if(my_hp_record->r_count >= batch_size(hp))
+   {
       hp_scan(hp);
+      hp_help_scan(hp);
+   }
 }
 
 
@@ -153,28 +175,42 @@ struct hazard_pointer_record* get_my_hp_record(void)
    }
    return (struct hazard_pointer_record*) hp_record;
 }
+
+void hp_push(struct hazard_pointer_record* record, void* node)
+{
+   struct node_ll* deleted_node = chkmalloc(sizeof(*deleted_node));
+   deleted_node->data = node;
+   deleted_node->next = record->r_list;
+   record->r_list = deleted_node;
+}
       
 void hp_scan(struct hazard_pointer* hp)
 {
+   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
    uint32_t p = 0;
    uint32_t new_dcount = 0;
-   size_t nb_pointers = hp->nb_threads * hp->size;
-   size_t batch_size = nb_pointers * 2;
-   void** plist = chkcalloc(nb_pointers, sizeof(*plist));
+   size_t batch_size = batch_size(hp);
+   struct node_ll** plist = chkcalloc(atomic_load(&hp->h), sizeof(*plist));
    void** new_dlist = chkmalloc(sizeof(*new_dlist) * batch_size);
    
-   void** dlist = get_dlist(hp, batch_size);
-   uint32_t* dcount = get_dcount();
+   // Retrieve the dlist of the record
+   struct node_ll** dlist = chkmalloc(sizeof(*dlist) * my_hp_record->r_count);
+   uint32_t dlist_count = 0;
+   for (struct node_ll* i = my_hp_record->r_list; i; i = i->next)
+   {
+      dlist[dlist_count] = i;
+      dlist_count++;
+   }
    
    // Stage 1
-   for(uint32_t i = 0; i < nb_pointers; ++i)
+   for(struct hazard_pointer_record* i = atomic_load(&hp->head); i; i = i->next)
    {
-      if(hp->hp[i])
-         plist[p++] = atomic_load(&hp->hp[i]);
+      for(uint32_t j = 0; j < hp->nb_pointers; j++)
+         plist[p++] = atomic_load(&i->hp[j]);
    }
    
    // Stage 2
-   qsort(plist, p, sizeof(void*), cmpfunc);
+   qsort(plist, p, sizeof(struct node_ll*), cmpfunc);
    
    // Stage 3
    for(uint32_t i = 0; i < batch_size; ++i)
@@ -190,7 +226,7 @@ void hp_scan(struct hazard_pointer* hp)
    {
       dlist[i] = new_dlist[i];
    }
-   *dcount = new_dcount;
+   my_hp_record->r_count = new_dcount;
    
    free(plist);
    free(new_dlist);
@@ -198,26 +234,38 @@ void hp_scan(struct hazard_pointer* hp)
 
 void hp_help_scan(struct hazard_pointer* hp)
 {
-   
+   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   for (struct hazard_pointer_record* i = hp->head; i; i = i->next)
+   {
+      if(i->active)
+         continue;
+      if(atomic_tas(&i->active))
+         continue;
+      
+      while (i->r_count > 0)
+      {
+         // TODO
+      }
+   }
 }
 
 int cmpfunc (const void* a, const void* b)
 {
-   return (*(void**)a - *(void**)b);
+   return (((struct node_ll*)a)->data - ((struct node_ll*)b)->data);
 }
 
-int binary_search(void** arr, int l, int r, int x)
+int binary_search(struct node_ll** arr, int l, int r, int x)
 {
    if (r >= l)
    {
       int mid = l + (r - l)/2;
       
       // If the element is present at the middle itself
-      if ((uint32_t)arr[mid] == x)
+      if ((uint32_t)arr[mid]->data == x)
          return mid;
       
       // Search left
-      if ((uint32_t)arr[mid] > x)
+      if ((uint32_t)arr[mid]->data > x)
          return binary_search(arr, l, mid - 1, x);
       
       // Else search right

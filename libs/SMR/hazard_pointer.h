@@ -30,6 +30,10 @@ struct hazard_pointer{
 
 struct hazard_pointer* new_hazard_pointer(void (*free_node)(void*), uint32_t nb_pointers);
 
+void hp_subscribe(struct hazard_pointer* hp);
+
+void hp_unsubscribe(struct hazard_pointer* hp);
+
 void** hp_get(struct hazard_pointer* hp, uint32_t index);
 
 void hp_delete_node(struct hazard_pointer* hp, void* node);
