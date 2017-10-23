@@ -54,9 +54,9 @@ static pthread_key_t prev;
 
 
 
-struct hazard_pointer* linked_list_init(uint32_t nb_threads)
+struct hazard_pointer* linked_list_init(void)
 {
-   struct hazard_pointer* res = new_hazard_pointer(NB_HP, (void(*)(void*))delete_node);
+   struct hazard_pointer* res = new_hazard_pointer((void(*)(void*))delete_node, NB_HP);
    pthread_once(&key_once, make_keys);
    return res;
 }
@@ -87,6 +87,7 @@ struct linked_list* linked_list_insert(
    hash_type hash = item->hash;
    
    // Hazard pointers
+   hp_subscribe(hp);
    struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
    struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
    struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
@@ -115,6 +116,7 @@ struct linked_list* linked_list_insert(
       }
    }
    
+   hp_unsubscribe(hp);
    *prev_hp = NULL;
    *cur_hp = NULL;
    *next_hp = NULL;
@@ -131,6 +133,7 @@ struct linked_list* linked_list_get(
   hash_type hash)
 {
    // Hazard pointers
+   hp_subscribe(hp);
    struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
    struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
    struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
@@ -145,6 +148,7 @@ struct linked_list* linked_list_get(
       result = *(cur_p);
    }
    
+   hp_unsubscribe(hp);
    *prev_hp = NULL;
    *cur_hp = NULL;
    *next_hp = NULL;
@@ -161,6 +165,7 @@ bool linked_list_delete(
   hash_type hash)
 {
    // Hazard pointers
+   hp_subscribe(hp);
    struct linked_list** prev_hp = (struct linked_list**) hp_get(hp, prev_hp_index);
    struct linked_list** cur_hp = (struct linked_list**) hp_get(hp, cur_hp_index);
    struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
@@ -194,6 +199,7 @@ bool linked_list_delete(
       break;
    }
    
+   hp_unsubscribe(hp);
    *prev_hp = NULL;
    *cur_hp = NULL;
    *next_hp = NULL;
@@ -202,7 +208,7 @@ bool linked_list_delete(
 }
 
 
-// Not usable in concurent environement
+// Not usable in concurent environements
 void linked_list_free(struct linked_list** list)
 {
    struct linked_list* cur_p = *list;

@@ -28,7 +28,7 @@ struct linked_list
 
 
 struct hazard_pointer* linked_list_init(
-  uint32_t nb_threads);
+  void);
 
 
 

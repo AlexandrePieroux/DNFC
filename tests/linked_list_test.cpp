@@ -154,7 +154,7 @@ void init(arguments_t** &args, bool active_comparison)
 
   // Preparing the structure
   args = new arguments_t*[nb_threads];
-  struct hazard_pointer* hp = linked_list_init(nb_threads);
+  struct hazard_pointer* hp = linked_list_init();
   linked_list** table = new linked_list*;
   *table = new_linked_list(0,0,NULL);
 

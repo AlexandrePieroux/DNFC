@@ -14,10 +14,13 @@
 struct hazard_pointer_record* new_hp_record(struct hazard_pointer* hp);
 
 // Retreive the TLS variable denoted by 'my_hp_record.
-struct hazard_pointer_record* get_my_hp_record(void);
+struct hazard_pointer_record** get_my_hp_record(void);
 
-//
+// Push a node on the list of removable node in the record
 void hp_push(struct hazard_pointer_record* record, void* node);
+
+// Pop a node on the list of removable node in the record
+void* hp_pop(struct hazard_pointer_record* record);
 
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
@@ -50,7 +53,7 @@ struct hazard_pointer* new_hazard_pointer(void (*free_node)(void*), uint32_t nb_
    result->free_node = free_node;
    result->nb_pointers = nb_pointers;
    result->h = 0;
-   result->head = new_hp_record(result);
+   result->head = NULL;
 
    pthread_once(&key_once, smr_make_keys);
    return result;
@@ -61,7 +64,7 @@ struct hazard_pointer* new_hazard_pointer(void (*free_node)(void*), uint32_t nb_
 void hp_subscribe(struct hazard_pointer* hp)
 {
    // Retrive TLS variable 'my_hp_record'
-   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   struct hazard_pointer_record** my_hp_record = get_my_hp_record();
    
    // First try to reuse a retire HP record
    for(struct hazard_pointer_record* i = hp->head ; i; i = i->next)
@@ -72,7 +75,7 @@ void hp_subscribe(struct hazard_pointer* hp)
          continue;
       
       // Sucessfully locked one record to use
-      my_hp_record = i;
+      *my_hp_record = i;
       return;
    }
    
@@ -80,15 +83,15 @@ void hp_subscribe(struct hazard_pointer* hp)
    while(!fetch_and_add(&hp->h, hp->nb_pointers));
    
    // Allocate and push a new record
-   my_hp_record = new_hp_record(hp);
-   my_hp_record->active = true;
+   *my_hp_record = new_hp_record(hp);
+   (*my_hp_record)->active = true;
    struct hazard_pointer_record* oldhead = atomic_load(&hp->head);
 
    // Add the new record to the list
    for(;;)
    {
-      my_hp_record->next = hp->head;
-      if(atomic_compare_and_swap(&hp->head, &oldhead, my_hp_record))
+      (*my_hp_record)->next = hp->head;
+      if(atomic_compare_and_swap(&hp->head, &oldhead, *my_hp_record))
          break;
       oldhead = atomic_load(&hp->head);
    }
@@ -98,31 +101,31 @@ void hp_subscribe(struct hazard_pointer* hp)
 
 void hp_unsubscribe(struct hazard_pointer* hp)
 {
-   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   struct hazard_pointer_record** my_hp_record = get_my_hp_record();
    for(uint32_t i = 0; i < hp->nb_pointers; i++)
    {
-      my_hp_record->hp[i] = NULL;
+      (*my_hp_record)->hp[i] = NULL;
    }
-   my_hp_record->hp = false;
+   (*my_hp_record)->active = false;
 }
 
 
 
 void** hp_get(struct hazard_pointer* hp, uint32_t index)
 {
-   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
-   return &my_hp_record->hp[index];
+   struct hazard_pointer_record** my_hp_record = get_my_hp_record();
+   return &(*my_hp_record)->hp[index];
 }
 
 
 
 void hp_delete_node(struct hazard_pointer* hp, void* node)
 {
-   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
-   hp_push(my_hp_record, node);
-   my_hp_record->r_count++;
+   struct hazard_pointer_record** my_hp_record = get_my_hp_record();
+   hp_push(*my_hp_record, node);
+   (*my_hp_record)->r_count++;
    
-   if(my_hp_record->r_count >= batch_size(hp))
+   if((*my_hp_record)->r_count >= batch_size(hp))
    {
       hp_scan(hp);
       hp_help_scan(hp);
@@ -160,20 +163,20 @@ struct hazard_pointer_record* new_hp_record(struct hazard_pointer* hp)
 {
    struct hazard_pointer_record* result = chkmalloc(sizeof(*result));
    result->hp = chkmalloc(sizeof(result->hp) * hp->nb_pointers);
-   result->r_list = chkmalloc(sizeof(result->r_list));
-   result->r_list->next = NULL;
+   result->r_list = NULL;
+   result->r_count = 0;
    return result;
 }
 
-struct hazard_pointer_record* get_my_hp_record(void)
+struct hazard_pointer_record** get_my_hp_record(void)
 {
-   void* hp_record = pthread_getspecific(my_hp_record);
+   void** hp_record = pthread_getspecific(my_hp_record);
    if(!hp_record)
    {
       hp_record = chkcalloc(1, sizeof *hp_record);
       pthread_setspecific(my_hp_record, hp_record);
    }
-   return (struct hazard_pointer_record*) hp_record;
+   return (struct hazard_pointer_record**) hp_record;
 }
 
 void hp_push(struct hazard_pointer_record* record, void* node)
@@ -183,10 +186,19 @@ void hp_push(struct hazard_pointer_record* record, void* node)
    deleted_node->next = record->r_list;
    record->r_list = deleted_node;
 }
+
+void* hp_pop(struct hazard_pointer_record* record)
+{
+   struct node_ll* candidate = record->r_list;
+   record->r_list = candidate->next;
+   void* data = candidate->data;
+   free(candidate);
+   return data;
+}
       
 void hp_scan(struct hazard_pointer* hp)
 {
-   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   struct hazard_pointer_record** my_hp_record = get_my_hp_record();
    uint32_t p = 0;
    uint32_t new_dcount = 0;
    size_t batch_size = batch_size(hp);
@@ -194,9 +206,9 @@ void hp_scan(struct hazard_pointer* hp)
    void** new_dlist = chkmalloc(sizeof(*new_dlist) * batch_size);
    
    // Retrieve the dlist of the record
-   struct node_ll** dlist = chkmalloc(sizeof(*dlist) * my_hp_record->r_count);
+   struct node_ll** dlist = chkmalloc(sizeof(*dlist) * (*my_hp_record)->r_count);
    uint32_t dlist_count = 0;
-   for (struct node_ll* i = my_hp_record->r_list; i; i = i->next)
+   for(struct node_ll* i = (*my_hp_record)->r_list; i; i = i->next)
    {
       dlist[dlist_count] = i;
       dlist_count++;
@@ -215,37 +227,54 @@ void hp_scan(struct hazard_pointer* hp)
    // Stage 3
    for(uint32_t i = 0; i < batch_size; ++i)
    {
-      if(binary_search(plist, 0, p, dlist[i]))
+      if(binary_search(plist, 0, p, dlist[i]->data))
          new_dlist[new_dcount++] = dlist[i];
       else
-         hp->free_node(dlist[i]);
+      {
+         hp->free_node(dlist[i]->data);
+         free(dlist[i]);
+      }
    }
    
    // Stage 4
    for (uint32_t i = 0; i < new_dcount; ++i)
-   {
-      dlist[i] = new_dlist[i];
-   }
-   my_hp_record->r_count = new_dcount;
+      hp_push(*my_hp_record, new_dlist[i]);
+   (*my_hp_record)->r_count = new_dcount;
    
    free(plist);
    free(new_dlist);
+   free(dlist);
 }
 
 void hp_help_scan(struct hazard_pointer* hp)
 {
-   struct hazard_pointer_record* my_hp_record = get_my_hp_record();
+   struct hazard_pointer_record** my_hp_record = get_my_hp_record();
    for (struct hazard_pointer_record* i = hp->head; i; i = i->next)
    {
+      // Trying to lock the next non-used hazard pointer record
       if(i->active)
          continue;
       if(atomic_tas(&i->active))
          continue;
       
-      while (i->r_count > 0)
+      // Inserting the r_list of the node in my_hp_record
+      struct node_ll* tmp;
+      for (struct node_ll* j = i->r_list; j; j = i->r_list)
       {
-         // TODO
+         tmp = j->next;
+         j->next = (*my_hp_record)->r_list;
+         i->r_list = tmp;
+         (*my_hp_record)->r_list = j;
+         
+         i->r_count--;
+         (*my_hp_record)->r_count++;
+         
+         // Scan if we reached the threshold
+         if((*my_hp_record)->r_count >= batch_size(hp))
+            hp_scan(hp);
       }
+      // Release the record
+      i->active = false;
    }
 }
 
@@ -260,7 +289,7 @@ int binary_search(struct node_ll** arr, int l, int r, int x)
    {
       int mid = l + (r - l)/2;
       
-      // If the element is present at the middle itself
+      // If the element is present in the middle
       if ((uint32_t)arr[mid]->data == x)
          return mid;
       
