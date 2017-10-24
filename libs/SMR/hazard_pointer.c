@@ -19,9 +19,6 @@ struct hazard_pointer_record** get_my_hp_record(void);
 // Push a node on the list of removable node in the record
 void hp_push(struct hazard_pointer_record* record, void* node);
 
-// Pop a node on the list of removable node in the record
-void* hp_pop(struct hazard_pointer_record* record);
-
 // Create the key of the hasard pointers.
 void hp_scan(struct hazard_pointer* hp);
 
@@ -123,7 +120,6 @@ void hp_delete_node(struct hazard_pointer* hp, void* node)
 {
    struct hazard_pointer_record** my_hp_record = get_my_hp_record();
    hp_push(*my_hp_record, node);
-   (*my_hp_record)->r_count++;
    
    if((*my_hp_record)->r_count >= batch_size(hp))
    {
@@ -185,64 +181,60 @@ void hp_push(struct hazard_pointer_record* record, void* node)
    deleted_node->data = node;
    deleted_node->next = record->r_list;
    record->r_list = deleted_node;
-}
-
-void* hp_pop(struct hazard_pointer_record* record)
-{
-   struct node_ll* candidate = record->r_list;
-   record->r_list = candidate->next;
-   void* data = candidate->data;
-   free(candidate);
-   return data;
+   record->r_count++;
 }
       
 void hp_scan(struct hazard_pointer* hp)
 {
    struct hazard_pointer_record** my_hp_record = get_my_hp_record();
-   uint32_t p = 0;
    uint32_t new_dcount = 0;
    size_t batch_size = batch_size(hp);
    struct node_ll** plist = chkcalloc(atomic_load(&hp->h), sizeof(*plist));
-   void** new_dlist = chkmalloc(sizeof(*new_dlist) * batch_size);
    
    // Retrieve the dlist of the record
    struct node_ll** dlist = chkmalloc(sizeof(*dlist) * (*my_hp_record)->r_count);
    uint32_t dlist_count = 0;
    for(struct node_ll* i = (*my_hp_record)->r_list; i; i = i->next)
-   {
-      dlist[dlist_count] = i;
-      dlist_count++;
-   }
+      dlist[dlist_count++] = i;
+   (*my_hp_record)->r_list = NULL;
    
    // Stage 1
+   uint32_t p = 0;
    for(struct hazard_pointer_record* i = atomic_load(&hp->head); i; i = i->next)
    {
-      for(uint32_t j = 0; j < hp->nb_pointers; j++)
-         plist[p++] = atomic_load(&i->hp[j]);
+      if(i->active)
+      {
+         for(uint32_t j = 0; j < hp->nb_pointers; j++)
+         {
+            void* hp = atomic_load(&i->hp[j]);
+            if(hp)
+               plist[p++] = hp;
+         }
+      }
    }
    
    // Stage 2
    qsort(plist, p, sizeof(struct node_ll*), cmpfunc);
    
    // Stage 3
+   struct node_ll* tmp;
    for(uint32_t i = 0; i < batch_size; ++i)
    {
-      if(binary_search(plist, 0, p, dlist[i]->data))
-         new_dlist[new_dcount++] = dlist[i];
-      else
+      if(binary_search(plist, 0, p - 1, dlist[i]->data))
       {
+         tmp = (*my_hp_record)->r_list;
+         (*my_hp_record)->r_list = dlist[i];
+         dlist[i]->next = tmp;
+      } else {
          hp->free_node(dlist[i]->data);
          free(dlist[i]);
       }
    }
    
    // Stage 4
-   for (uint32_t i = 0; i < new_dcount; ++i)
-      hp_push(*my_hp_record, new_dlist[i]);
    (*my_hp_record)->r_count = new_dcount;
    
    free(plist);
-   free(new_dlist);
    free(dlist);
 }
 
@@ -258,12 +250,10 @@ void hp_help_scan(struct hazard_pointer* hp)
          continue;
       
       // Inserting the r_list of the node in my_hp_record
-      struct node_ll* tmp;
       for (struct node_ll* j = i->r_list; j; j = i->r_list)
       {
-         tmp = j->next;
+         i->r_list = j->next;
          j->next = (*my_hp_record)->r_list;
-         i->r_list = tmp;
          (*my_hp_record)->r_list = j;
          
          i->r_count--;

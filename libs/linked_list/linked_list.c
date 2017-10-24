@@ -297,7 +297,7 @@ struct linked_list** get_var(pthread_key_t key)
    void** p = pthread_getspecific(key);
    if(!p)
    {
-      p = chkcalloc(sizeof *p, 1);
+      p = chkcalloc(1, sizeof *p);
       pthread_setspecific(key, p);
    }
    return (struct linked_list**) p;

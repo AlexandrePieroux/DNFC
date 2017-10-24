@@ -11,11 +11,11 @@ extern "C"
 
 #include "gtest/gtest.h"
 
-#define RANGE_NUMBERS      10
-#define NB_STEPS_NUMBERS   1
+#define RANGE_NUMBERS      10000
+#define NB_STEPS_NUMBERS   10
 
-#define RANGE_THREADS      1
-#define NB_STEPS_THREADS   1
+#define RANGE_THREADS      8
+#define NB_STEPS_THREADS   4
 
 int nb_numbers;
 int nb_threads;
