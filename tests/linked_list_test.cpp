@@ -31,7 +31,7 @@ struct arguments_t
 };
 
 
-void test_iterations(void (fun)(threadpool_t*, arguments_t**));
+void test_iterations(void (fun)(threadpool_t*, arguments_t**), bool active_comparison);
 key_type* get_random_numbers(uint32_t size);
 void* job_insert(void* args);
 void* job_get(void* args);
@@ -45,7 +45,7 @@ TEST (LinkedListTest, Insert)
       for (uint32_t i = 0; i < nb_threads; ++i)
          threadpool_add_work(pool, &job_insert, args[i]);
       threadpool_wait(pool);
-   });
+   }, true);
 }
 
 TEST (LinkedListTest, Get)
@@ -58,7 +58,7 @@ TEST (LinkedListTest, Get)
       for (uint32_t i = 0; i < nb_threads; ++i)
          threadpool_add_work(pool, &job_get, args[i]);
       threadpool_wait(pool);
-   });
+   }, true);
 }
 
 TEST (LinkedListTest, Remove)
@@ -71,7 +71,7 @@ TEST (LinkedListTest, Remove)
       for (uint32_t i = 0; i < nb_threads; ++i)
          threadpool_add_work(pool, &job_remove, args[i]);
       threadpool_wait(pool);
-   });
+   }, true);
 }
 
 TEST (LinkedListTest, ConcurrentUpdates)
@@ -83,7 +83,7 @@ TEST (LinkedListTest, ConcurrentUpdates)
          threadpool_add_work(pool, &job_get, args[i]);
          threadpool_add_work(pool, &job_remove, args[i]);
       }
-   });
+   }, false);
 }
 
 
@@ -116,7 +116,7 @@ key_type* get_random_numbers(uint32_t size)
 
 
 
-void test_iterations(void (fun)(threadpool_t*, arguments_t**))
+void test_iterations(void (fun)(threadpool_t*, arguments_t**), bool active_comparison)
 {
    arguments_t** args;
    threadpool_t* pool = new_threadpool(RANGE_THREADS);
@@ -129,7 +129,7 @@ void test_iterations(void (fun)(threadpool_t*, arguments_t**))
       for(nb_numbers = steps_number; nb_numbers <= RANGE_NUMBERS; nb_numbers+=steps_number)
       {
          std::cout << "[ ITERATION] " << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers;
-         init(args, true);
+         init(args, active_comparison);
          
          auto start = std::chrono::high_resolution_clock::now();
          fun(pool, args);

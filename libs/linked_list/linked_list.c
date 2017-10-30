@@ -247,10 +247,10 @@ bool linked_list_find(
    for(;;)
    {
       *prev_p = *list;
-      *cur_p = get_list_pointer(atomic_load_list(&(*prev_p)->next));
+      *cur_hp = get_list_pointer(atomic_load_list(&(*prev_p)->next));
+      *cur_p = *cur_hp;
       
-      *cur_hp = *cur_p;
-      if((*prev_p)->next != *cur_p)
+      if(atomic_load_list(&(*prev_p)->next) != *cur_p)
          continue;
       
       for(;;)
@@ -258,9 +258,9 @@ bool linked_list_find(
          if(!(*cur_p))
             return NULL;
          
-         next_p = (*cur_p)->next;
+         *next_hp = atomic_load_list(&(*cur_p)->next);
+         next_p = *next_hp;
          
-         *next_hp = next_p;
          if(atomic_load_list(&(*cur_p)->next) != next_p)
             break;
          
@@ -283,8 +283,8 @@ bool linked_list_find(
             else
                break;
          }
-         *cur_p = next_p;
          *cur_hp = next_p;
+         *cur_p = *cur_hp;
       }
    }
    return false;
