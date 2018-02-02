@@ -2,13 +2,15 @@
 
 // Atomic actions macros
 #define atomic_compare_and_swap(t,old,new) __atomic_compare_exchange_n(t, old, new, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
-#define atomic_load_list(p) __atomic_load_n(p, __ATOMIC_RELAXED)
+#define atomic_load_item(p) __atomic_load_n(p, __ATOMIC_RELAXED)
 
 #define fetch_and_inc(n) __atomic_fetch_add(n, 1, __ATOMIC_RELAXED)
 #define fetch_and_dec(n) __atomic_fetch_sub(n, 1, __ATOMIC_RELAXED)
 
-#define cur_index 0
-#define next_index 1
+#define NB_HP         3
+
+#define cur_index     0
+#define next_index    1
 
 /*                                     Private function                                               */
 
@@ -31,7 +33,7 @@ struct queue* new_queue(size_t capacity, size_t nb_thread)
    queue->max_size = capacity;
    queue->head = dummy_node;
    queue->tail = dummy_node;
-   queue->hp = new_hazard_pointer(2, nb_thread, free_item);
+   queue->hp = new_hazard_pointer((void(*)(void*))free_item, NB_HP);
    return queue;
 }
 
@@ -47,6 +49,7 @@ bool queue_push(struct queue* queue, void* data)
    }
    
    // Get hazardous pointer
+   hp_subscribe(queue->hp);
    struct queue_item** cur = (struct queue_item**) hp_get(queue->hp, cur_index);
    
    // Prepare new data
@@ -79,19 +82,22 @@ bool queue_push(struct queue* queue, void* data)
       }
       
       // Try to effectively push the new node
-      void* null_ptr = NULL;
+      void* null_ptr = chkmalloc(sizeof(null_ptr));
+      null_ptr = (void*) NULL;
       if(atomic_compare_and_swap(&tail->next, null_ptr, node))
          break;
    }
    // Set the tail to the new node
    atomic_compare_and_swap(&queue->tail, &tail, node);
    *cur = NULL;
+   hp_unsubscribe(queue->hp);
    return true;
 }
 
 void* queue_pop(struct queue* queue)
 {
    // Get hazardous pointers
+   hp_subscribe(queue->hp);
    struct queue_item** hp_cur = (struct queue_item**) hp_get(queue->hp, cur_index);
    struct queue_item** hp_next = (struct queue_item**) hp_get(queue->hp, next_index);
       
@@ -140,6 +146,7 @@ void* queue_pop(struct queue* queue)
    *hp_cur = NULL;
    *hp_next = NULL;
    hp_delete_node(queue->hp, head);
+   hp_unsubscribe(queue->hp);
    return result;
 }
 

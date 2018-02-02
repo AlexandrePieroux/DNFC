@@ -29,7 +29,7 @@ void hp_help_scan(struct hazard_pointer* hp);
 int cmpfunc (const void* a, const void* b);
 
 // Binary search
-int binary_search(struct node_ll** arr, int l, int r, int x);
+int binary_search(void** arr, int l, int r, int x);
 
 // Create pthread keys
 void smr_make_keys(void);
@@ -66,9 +66,7 @@ void hp_subscribe(struct hazard_pointer* hp)
    // First try to reuse a retire HP record
    for(struct hazard_pointer_record* i = hp->head ; i; i = i->next)
    {
-      if(i->active)
-         continue;
-      if(atomic_tas(&i->active))
+      if(i->active || atomic_tas(&i->active))
          continue;
       
       // Sucessfully locked one record to use
@@ -76,7 +74,7 @@ void hp_subscribe(struct hazard_pointer* hp)
       return;
    }
    
-   // No HP records available for reuse
+   // No HP records available for reuse so we add new ones
    while(!fetch_and_add(&hp->h, hp->nb_pointers));
    
    // Allocate and push a new record
@@ -189,12 +187,12 @@ void hp_scan(struct hazard_pointer* hp)
    struct hazard_pointer_record** my_hp_record = get_my_hp_record();
    uint32_t new_dcount = 0;
    size_t batch_size = batch_size(hp);
-   struct node_ll** plist = chkcalloc(atomic_load(&hp->h), sizeof(*plist));
+   void** plist = chkcalloc(atomic_load(&hp->h), sizeof(*plist));
    
    // Retrieve the dlist of the record
    struct node_ll** dlist = chkmalloc(sizeof(*dlist) * (*my_hp_record)->r_count);
    uint32_t dlist_count = 0;
-   for(struct node_ll* i = (*my_hp_record)->r_list; i; i = i->next)
+   for(struct node_ll* i = (*my_hp_record)->r_list; dlist_count < (*my_hp_record)->r_count; i = i->next)
       dlist[dlist_count++] = i;
    (*my_hp_record)->r_list = NULL;
    
@@ -211,6 +209,12 @@ void hp_scan(struct hazard_pointer* hp)
                plist[p++] = hp;
          }
       }
+   }
+   if(p <= 0)
+   {
+      free(plist);
+      free(dlist);
+      return;
    }
    
    // Stage 2
@@ -270,21 +274,21 @@ void hp_help_scan(struct hazard_pointer* hp)
 
 int cmpfunc (const void* a, const void* b)
 {
-   return (((struct node_ll*)a)->data - ((struct node_ll*)b)->data);
+   return (int)a - (int)b;
 }
 
-int binary_search(struct node_ll** arr, int l, int r, int x)
+int binary_search(void** arr, int l, int r, int x)
 {
    if (r >= l)
    {
       int mid = l + (r - l)/2;
       
       // If the element is present in the middle
-      if ((uint32_t)arr[mid]->data == x)
+      if ((uint32_t)arr[mid] == x)
          return mid;
       
       // Search left
-      if ((uint32_t)arr[mid]->data > x)
+      if ((uint32_t)arr[mid] > x)
          return binary_search(arr, l, mid - 1, x);
       
       // Else search right

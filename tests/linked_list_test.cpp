@@ -83,6 +83,7 @@ TEST (LinkedListTest, ConcurrentUpdates)
          threadpool_add_work(pool, &job_get, args[i]);
          threadpool_add_work(pool, &job_remove, args[i]);
       }
+      threadpool_wait(pool);
    }, false);
 }
 
@@ -119,13 +120,13 @@ key_type* get_random_numbers(uint32_t size)
 void test_iterations(void (fun)(threadpool_t*, arguments_t**), bool active_comparison)
 {
    arguments_t** args;
-   threadpool_t* pool = new_threadpool(RANGE_THREADS);
    
    int steps_thread = RANGE_THREADS/NB_STEPS_THREADS;
    int steps_number = RANGE_NUMBERS/NB_STEPS_NUMBERS;
    
    for(nb_threads = steps_thread; nb_threads <= RANGE_THREADS; nb_threads+=steps_thread)
    {
+      threadpool_t* pool = new_threadpool(nb_threads);
       for(nb_numbers = steps_number; nb_numbers <= RANGE_NUMBERS; nb_numbers+=steps_number)
       {
          std::cout << "[ ITERATION] " << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers;
@@ -140,8 +141,8 @@ void test_iterations(void (fun)(threadpool_t*, arguments_t**), bool active_compa
          linked_list_free(args[0]->table);
          free_hp(args[0]->hp);
       }
+      free_threadpool(pool);
    }
-   free_threadpool(pool);
 }
 
 
