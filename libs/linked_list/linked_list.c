@@ -25,6 +25,9 @@ bool linked_list_find(
 // Retreive a thread context variable denoted by the key.
 struct linked_list** get_var(pthread_key_t key);
 
+// Retreive a thread context variable denoted by the key 'prev'.
+struct linked_list*** get_prev_var(pthread_key_t key);
+
 // Retrieve the mark bit.
 uintptr_t get_bit(struct linked_list* list);
 
@@ -47,8 +50,10 @@ void make_keys(void);
 /*                                     Private per thread variables                                           */
 
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+
 static pthread_key_t cur;
 static pthread_key_t prev;
+static pthread_key_t next;
 
 /*                                     Private per thread variables                                           */
 
@@ -94,8 +99,7 @@ struct linked_list* linked_list_insert(
    
    // Private per thread variables
    struct linked_list** cur_p = get_var(cur);
-   struct linked_list** prev_p = get_var(prev);
-   
+   struct linked_list*** prev_p = get_prev_var(prev);
    struct linked_list* result;
    
    for(;;)
@@ -108,7 +112,7 @@ struct linked_list* linked_list_insert(
       item->next = get_list_pointer(*cur_p);
       
       struct linked_list* cur_p_list = get_list_pointer(*cur_p);
-      if(atomic_compare_and_swap(prev_p, &cur_p_list, item))
+      if(atomic_compare_and_swap(*prev_p, &cur_p_list, item))
       {
          result = item;
          break;
@@ -141,7 +145,6 @@ struct linked_list* linked_list_get(
    struct linked_list** cur_p = get_var(cur);
    
    struct linked_list* result = NULL;
-   
    if(linked_list_find(hp, list, key, hash))
    {
       result = *cur_p;
@@ -170,10 +173,10 @@ bool linked_list_delete(
    struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
    
    // Private per thread variables
+   struct linked_list*** prev_p = get_prev_var(prev);
    struct linked_list** cur_p = get_var(cur);
-   struct linked_list** prev_p = get_var(prev);
+   struct linked_list** next_p = get_var(next);
    
-   struct linked_list* next;
    bool result;
 
    for(;;)
@@ -184,13 +187,17 @@ bool linked_list_delete(
          break;
       }
 
-      next = atomic_load_list(&(*cur_p)->next);
-      if(!atomic_compare_and_swap(&(*cur_p)->next, &next, mark_pointer(next, 1)))
+      struct linked_list* next_cleared = get_list_pointer(*next_p);
+      if((unsigned long)mark_pointer(*next_p, 1) > 0xF000000000000000)
+         printf("Haha");
+      if(!atomic_compare_and_swap(&(*cur_p)->next, &next_cleared, mark_pointer(*next_p, 1)))
          continue;
       
       struct linked_list* cur_p_list = get_list_pointer(*cur_p);
-      if(atomic_compare_and_swap(prev_p, &cur_p_list, get_list_pointer(next)))
-         hp_delete_node(hp, get_list_pointer(*cur_p));
+      if((unsigned long)next_cleared > 0xF000000000000000)
+         printf("Haha");
+      if(atomic_compare_and_swap(*prev_p, &cur_p_list, next_cleared))
+         hp_delete_node(hp, *cur_p);
       else
          linked_list_find(hp, list, key, hash);
       
@@ -238,18 +245,17 @@ bool linked_list_find(
    struct linked_list** next_hp = (struct linked_list**) hp_get(hp, next_hp_index);
    
    // Private per thread variables
+   struct linked_list*** prev_p = get_prev_var(prev);
    struct linked_list** cur_p = get_var(cur);
-   struct linked_list** prev_p = get_var(prev);
-   
-   struct linked_list* next_p;
+   struct linked_list** next_p = get_var(next);
    
    for(;;)
    {
-      *prev_p = *list;
-      *cur_p = *prev_p;
+      *prev_p = list;
+      *cur_p = **prev_p;
       *cur_hp = *cur_p;
       
-      if(*prev_p != get_list_pointer(*cur_p))
+      if(**prev_p != get_list_pointer(*cur_p))
          continue;
       
       for(;;)
@@ -257,34 +263,34 @@ bool linked_list_find(
          if(!(*cur_p))
             return NULL;
          
-         next_p = atomic_load_list(&(*cur_p)->next);
-         *next_hp = next_p;
+         *next_p = atomic_load_list(&(*cur_p)->next);
+         *next_hp = *next_p;
          
-         if(atomic_load_list(&(*cur_p)->next) != next_p)
+         if(atomic_load_list(&(*cur_p)->next) != *next_p)
             break;
          
          key_type ckey = (*cur_p)->key;
          hash_type chash = (*cur_p)->hash;
          
-         if(*prev_p != get_list_pointer(*cur_p))
+         if(**prev_p != get_list_pointer(*cur_p))
             break;
          
-         if(!get_bit(next_p))
+         if(!get_bit(*next_p))
          {
-            bool eq = byte_stream_eq(ckey, key);
-            if(chash > hash || (eq && chash == hash))
+            bool eq = byte_stream_eq(ckey, key) && chash == hash;
+            if(chash > hash || eq)
                return eq;
-            *prev_p = (*cur_p)->next;
+            *prev_p = &(*cur_p)->next;
             *prev_hp = *cur_p;
          } else {
             struct linked_list* cur_p_clean = get_list_pointer(*cur_p);
-            if(atomic_compare_and_swap(&(*prev_p)->next, &cur_p_clean, get_list_pointer(next_p)))
+            if(atomic_compare_and_swap(*prev_p, &cur_p_clean, get_list_pointer(*next_p)))
                hp_delete_node(hp, get_list_pointer(*cur_p));
             else
                break;
          }
-         *cur_p = next_p;
-         *cur_hp = next_p;
+         *cur_p = *next_p;
+         *cur_hp = *next_p;
       }
    }
    return false;
@@ -301,6 +307,19 @@ struct linked_list** get_var(pthread_key_t key)
       pthread_setspecific(key, p);
    }
    return (struct linked_list**) p;
+}
+
+struct linked_list*** get_prev_var(pthread_key_t key)
+{
+   void** p = pthread_getspecific(key);
+   if(!p)
+   {
+      p = chkcalloc(1, sizeof *p);
+      pthread_setspecific(key, p);
+      if(!(*p))
+         *p = chkcalloc(1, sizeof **p);
+   }
+   return (struct linked_list***) p;
 }
 
 
@@ -328,8 +347,9 @@ struct linked_list* get_list_pointer(struct linked_list* list)
 
 void make_keys()
 {
-   pthread_key_create(&cur, NULL);
    pthread_key_create(&prev, NULL);
+   pthread_key_create(&cur, NULL);
+   pthread_key_create(&next, NULL);
 }
 
 

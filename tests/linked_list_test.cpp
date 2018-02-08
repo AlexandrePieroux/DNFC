@@ -38,7 +38,7 @@ void* job_get(void* args);
 void* job_remove(void* args);
 void init(arguments_t** &args, bool active_comparison);
 
-
+/*
 TEST (LinkedListTest, Insert)
 {
    test_iterations([](threadpool_t* pool, arguments_t** args){
@@ -60,7 +60,7 @@ TEST (LinkedListTest, Get)
       threadpool_wait(pool);
    }, true);
 }
-
+*/
 TEST (LinkedListTest, Remove)
 {
    test_iterations([](threadpool_t* pool, arguments_t** args){
