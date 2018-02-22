@@ -85,7 +85,7 @@ void hp_subscribe(struct hazard_pointer* hp)
    // Add the new record to the list
    for(;;)
    {
-      (*my_hp_record)->next = hp->head;
+      (*my_hp_record)->next = atomic_load(&hp->head);
       if(atomic_compare_and_swap(&hp->head, &oldhead, *my_hp_record))
          break;
       oldhead = atomic_load(&hp->head);
@@ -200,14 +200,11 @@ void hp_scan(struct hazard_pointer* hp)
    uint32_t p = 0;
    for(struct hazard_pointer_record* i = atomic_load(&hp->head); i; i = i->next)
    {
-      if(i->active)
+      for(uint32_t j = 0; j < hp->nb_pointers; j++)
       {
-         for(uint32_t j = 0; j < hp->nb_pointers; j++)
-         {
-            void* hp = atomic_load(&i->hp[j]);
-            if(hp)
-               plist[p++] = hp;
-         }
+         void* hp = atomic_load(&i->hp[j]);
+         if(hp)
+            plist[p++] = hp;
       }
    }
    if(p <= 0)
@@ -229,6 +226,7 @@ void hp_scan(struct hazard_pointer* hp)
          tmp = (*my_hp_record)->r_list;
          (*my_hp_record)->r_list = dlist[i];
          dlist[i]->next = tmp;
+         new_dcount++;
       } else {
          hp->free_node(dlist[i]->data);
          free(dlist[i]);

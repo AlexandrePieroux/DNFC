@@ -1,7 +1,7 @@
 #include "linked_list.h"
 
 #define atomic_compare_and_swap(t,old,new) __atomic_compare_exchange_n(t, old, new, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
-#define atomic_load_list(p) __atomic_load_n(p, __ATOMIC_RELAXED)
+#define atomic_load_list(p) __atomic_load_n(&p, __ATOMIC_RELAXED)
 #define store_barrier __atomic_thread_fence(__ATOMIC_RELAXED)
 
 #define NB_HP         3
@@ -9,7 +9,6 @@
 #define prev_hp_index 0
 #define cur_hp_index  1
 #define next_hp_index 2
-
 
 
 
@@ -29,13 +28,16 @@ struct linked_list** get_var(pthread_key_t key);
 struct linked_list*** get_prev_var(pthread_key_t key);
 
 // Retrieve the mark bit.
-uintptr_t get_bit(struct linked_list* list);
+uintptr_t get_mark(struct linked_list* list);
+
+// Compare the pointer and their marked bit
+bool ptr_bit_equal(struct linked_list* a, struct linked_list* b);
 
 // Mark the LSB of the address. This "tag" a node to be deleted.
 struct linked_list* mark_pointer(struct linked_list* list, uintptr_t bit);
 
 // Get the address of a tagged address.
-struct linked_list*  get_list_pointer(struct linked_list* list);
+struct linked_list*  get_clear_pointer(struct linked_list* list);
 
 // Delete a specified node.
 void delete_node(struct linked_list* node);
@@ -109,10 +111,11 @@ struct linked_list* linked_list_insert(
          result = *cur_p;
          break;
       }
-      item->next = get_list_pointer(*cur_p);
       
-      struct linked_list* cur_p_list = get_list_pointer(*cur_p);
-      if(atomic_compare_and_swap(*prev_p, &cur_p_list, item))
+      struct linked_list* clear_cur_p = get_clear_pointer(*cur_p);
+      item->next = clear_cur_p;
+      
+      if(atomic_compare_and_swap(*prev_p, &clear_cur_p, item))
       {
          result = item;
          break;
@@ -147,7 +150,7 @@ struct linked_list* linked_list_get(
    struct linked_list* result = NULL;
    if(linked_list_find(hp, list, key, hash))
    {
-      result = *cur_p;
+      result = get_clear_pointer(*cur_p);
    }
    
    hp_unsubscribe(hp);
@@ -187,15 +190,11 @@ bool linked_list_delete(
          break;
       }
 
-      struct linked_list* next_cleared = get_list_pointer(*next_p);
-      if((unsigned long)mark_pointer(*next_p, 1) > 0xF000000000000000)
-         printf("Haha");
+      struct linked_list* next_cleared = get_clear_pointer(*next_p);
       if(!atomic_compare_and_swap(&(*cur_p)->next, &next_cleared, mark_pointer(*next_p, 1)))
          continue;
       
-      struct linked_list* cur_p_list = get_list_pointer(*cur_p);
-      if((unsigned long)next_cleared > 0xF000000000000000)
-         printf("Haha");
+      struct linked_list* cur_p_list = get_clear_pointer(*cur_p);
       if(atomic_compare_and_swap(*prev_p, &cur_p_list, next_cleared))
          hp_delete_node(hp, *cur_p);
       else
@@ -222,7 +221,7 @@ void linked_list_free(struct linked_list** list)
 
    while(cur_p)
    {
-      next = get_list_pointer(cur_p->next);
+      next = get_clear_pointer(cur_p->next);
       free_byte_stream(cur_p->key);
       delete_node(cur_p);
       cur_p = next;
@@ -248,14 +247,14 @@ bool linked_list_find(
    struct linked_list*** prev_p = get_prev_var(prev);
    struct linked_list** cur_p = get_var(cur);
    struct linked_list** next_p = get_var(next);
-   
+      
    for(;;)
    {
-      *prev_p = list;
-      *cur_p = **prev_p;
+      *prev_p = &(*list)->next;
+      *cur_p = get_clear_pointer(**prev_p);
       *cur_hp = *cur_p;
       
-      if(**prev_p != get_list_pointer(*cur_p))
+      if(**prev_p != *cur_p)
          continue;
       
       for(;;)
@@ -263,19 +262,19 @@ bool linked_list_find(
          if(!(*cur_p))
             return NULL;
          
-         *next_p = atomic_load_list(&(*cur_p)->next);
-         *next_hp = *next_p;
+         *next_p = atomic_load_list((*cur_p)->next);
+         *next_hp = get_clear_pointer(*next_p);
          
-         if(atomic_load_list(&(*cur_p)->next) != *next_p)
+         if(atomic_load_list((*cur_p)->next) != *next_p)
             break;
          
          key_type ckey = (*cur_p)->key;
          hash_type chash = (*cur_p)->hash;
          
-         if(**prev_p != get_list_pointer(*cur_p))
+         if(**prev_p != get_clear_pointer(*cur_p))
             break;
          
-         if(!get_bit(*next_p))
+         if(!get_mark(*cur_p))
          {
             bool eq = byte_stream_eq(ckey, key) && chash == hash;
             if(chash > hash || eq)
@@ -283,17 +282,17 @@ bool linked_list_find(
             *prev_p = &(*cur_p)->next;
             *prev_hp = *cur_p;
          } else {
-            struct linked_list* cur_p_clean = get_list_pointer(*cur_p);
-            if(atomic_compare_and_swap(*prev_p, &cur_p_clean, get_list_pointer(*next_p)))
-               hp_delete_node(hp, get_list_pointer(*cur_p));
+            struct linked_list* cur_p_clean = get_clear_pointer(*cur_p);
+            if(atomic_compare_and_swap(*prev_p, &cur_p_clean, get_clear_pointer(*next_p)))
+               hp_delete_node(hp, *cur_p);
             else
                break;
          }
-         *cur_p = *next_p;
-         *cur_hp = *next_p;
+         *cur_hp = get_clear_pointer(*next_p);
+         *cur_p = *cur_hp;
       }
    }
-   return false;
+   return false; // Never happen
 }
 
 
@@ -324,9 +323,9 @@ struct linked_list*** get_prev_var(pthread_key_t key)
 
 
 
-uintptr_t get_bit(struct linked_list* list)
+uintptr_t get_mark(struct linked_list* list)
 {
-   return (uintptr_t) list & 0x1;
+   return (uintptr_t) (list->next) & 0x1;
 }
 
 
@@ -338,7 +337,7 @@ struct linked_list* mark_pointer(struct linked_list* list, uintptr_t bit)
 
 
 
-struct linked_list* get_list_pointer(struct linked_list* list)
+struct linked_list* get_clear_pointer(struct linked_list* list)
 {
    return (struct linked_list*) (((uintptr_t) list) & ~((uintptr_t)0x1));
 }
