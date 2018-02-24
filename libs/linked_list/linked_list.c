@@ -112,10 +112,10 @@ struct linked_list* linked_list_insert(
          break;
       }
       
-      struct linked_list* clear_cur_p = get_clear_pointer(*cur_p);
-      item->next = clear_cur_p;
+      struct linked_list* cur_cleared = get_clear_pointer(*cur_p);
+      item->next = cur_cleared;
       
-      if(atomic_compare_and_swap(*prev_p, &clear_cur_p, item))
+      if(atomic_compare_and_swap(*prev_p, &cur_cleared, item))
       {
          result = item;
          break;
@@ -194,8 +194,8 @@ bool linked_list_delete(
       if(!atomic_compare_and_swap(&(*cur_p)->next, &next_cleared, mark_pointer(*next_p, 1)))
          continue;
       
-      struct linked_list* cur_p_list = get_clear_pointer(*cur_p);
-      if(atomic_compare_and_swap(*prev_p, &cur_p_list, next_cleared))
+      struct linked_list* cur_cleared = get_clear_pointer(*cur_p);
+      if(atomic_compare_and_swap(*prev_p, &cur_cleared, next_cleared))
          hp_delete_node(hp, *cur_p);
       else
          linked_list_find(hp, list, key, hash);
@@ -282,8 +282,8 @@ bool linked_list_find(
             *prev_p = &(*cur_p)->next;
             *prev_hp = *cur_p;
          } else {
-            struct linked_list* cur_p_clean = get_clear_pointer(*cur_p);
-            if(atomic_compare_and_swap(*prev_p, &cur_p_clean, get_clear_pointer(*next_p)))
+            struct linked_list* cur_cleared = get_clear_pointer(*cur_p);
+            if(atomic_compare_and_swap(*prev_p, &cur_cleared, get_clear_pointer(*next_p)))
                hp_delete_node(hp, *cur_p);
             else
                break;
