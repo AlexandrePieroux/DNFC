@@ -151,6 +151,10 @@ if (CMAKE_VERSION VERSION_LESS 2.8.11)
   include_directories ("${gtest_SOURCE_DIR}/include")
 endif ()
 
+# Test library
+set (RANDOM_NUMBER_GENERATOR 
+     tests/tools)
+
 
 # Tests variables files
 set (LINKED_LIST_TEST tests/linked_list_test.cpp)
