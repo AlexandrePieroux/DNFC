@@ -1,13 +1,12 @@
 /**
 Inheritance header
 **/
-//#include "../DNFC.h"
 
 #include <math.h>
 #include <string.h>
-#include "../../classifier_rule/classifier_rule.h"
-#include "../../../../libs/byte_stream/byte_stream.h"
-#include "../../../../libs/hash_table/hash_table.h"
+#include "../classifier_rule/classifier_rule.h"
+#include "../byte_stream/byte_stream.h"
+#include "../hash_table/hash_table.h"
 
 /*H**********************************************************************
 * FILENAME :        hypercuts.h

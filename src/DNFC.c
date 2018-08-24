@@ -1,4 +1,4 @@
-#include "DNFC.h"
+#include "../include/DNFC/DNFC.h"
 
 
 /*          Private Functions              */
@@ -108,7 +108,7 @@ struct DNFC_tag* get_flow_tag(struct DNFC* classifier,
       // Note: HPs are mandatory to manipulate the linked list in a concurrent environement
       flow_tag = chkmalloc(sizeof(*flow_tag));
       flow_tag->flow_pckt_list = pckt_llist;
-      flow_tag->flow_pckt_list_hps = linked_list_init(classifier->nb_thread);
+      flow_tag->flow_pckt_list_hps = linked_list_init();
    
       if(!put_flow(flow_table, pckt, flow_tag)) // Check if the tag was already inserted while building it
       {

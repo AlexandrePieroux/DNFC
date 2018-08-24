@@ -3,10 +3,11 @@
 #include <stdlib.h>
 
 extern "C" {
-#include "../src/classifiers/static_classifiers/hypercuts/hypercuts.h"
+#include "../hypercuts.h"
 }
 
 #include "gtest/gtest.h"
+
 #define NB_RULES 2500
 #define NB_DIMENSIONS 5
 #define HEADER_LENGTH 64

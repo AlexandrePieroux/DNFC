@@ -4,9 +4,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "classifiers/static_classifiers/static_classifiers.h"
-#include "classifiers/dynamic_classifiers/dynamic_classifiers.h"
-#include "../libs/queue/queue.h"
+#include "../../src/hypercuts/hypercuts.h"
+#include "../../src/flow_table/flow_table.h"
+#include "../../src/queue/queue.h"
 
 typedef unsigned char u_char; // Defining u_char type for convenient display
 

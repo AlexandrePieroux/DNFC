@@ -4,8 +4,8 @@
 
 extern "C"
 {
-#include "../libs/queue/queue.h"
-#include "../libs/thread_pool/thread_pool.h"
+#include "../queue.h"
+#include "../../thread_pool/thread_pool.h"
 }
 
 #include "gtest/gtest.h"

@@ -4,9 +4,9 @@
 
 extern "C"
 {
-#include "../src/classifiers/dynamic_classifiers/flow_table/flow_table.h"
-#include "../libs/memory_management/memory_management.h"
-#include "../libs/thread_pool/thread_pool.h"
+#include "../flow_table.h"
+#include "../../memory_management/memory_management.h"
+#include "../../thread_pool/thread_pool.h"
 }
 
 #include "gtest/gtest.h"

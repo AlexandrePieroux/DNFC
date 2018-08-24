@@ -81,7 +81,7 @@
      result->size = 1;
      result->nb_elements = 0;
      result->hash = get_hash_func(hash_type);
-     result->hp = linked_list_init(nb_threads);
+     result->hp = linked_list_init();
      return result;
   }
 

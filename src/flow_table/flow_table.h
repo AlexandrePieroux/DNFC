@@ -12,9 +12,9 @@
  * AUTHOR :    Pieroux Alexandre
  *H*/
 
-#include "../../classifier_rule/classifier_field.h"
-#include "../../../../libs/packet_parsing/packet_parsing.h"
-#include "../../../../libs/hash_table/hash_table.h"
+#include "../classifier_rule/classifier_field.h"
+#include "../packet_parsing/packet_parsing.h"
+#include "../hash_table/hash_table.h"
 
 typedef unsigned char u_char;
 typedef struct hash_table flow_table;
