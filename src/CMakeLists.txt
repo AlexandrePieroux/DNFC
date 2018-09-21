@@ -3,7 +3,8 @@ project(dnfclib)
 
 # Recursively get all c source files
 file(GLOB_RECURSE SOURCES 
-    *.c
+    *.cpp
+    *.hpp
 )
 
 # Recursively get all cpp files of the test
