@@ -20,13 +20,14 @@ public:
 
   void subscribe();
   void unsubscribe();
-  T *get_pointer(int index);
+  T *get_pointer(const int &index);
   void delete_node(const T *node);
 
   HazardPointer(int a) : nbpointers(a), nbhp(0), head(NULL){};
   ~HazardPointer(){};
 
 private:
+  inline HazardPointer<T>::HazardPointerRecord *get_myhp();
   inline unsigned int get_batch_size();
   void scan();
   void help_scan();

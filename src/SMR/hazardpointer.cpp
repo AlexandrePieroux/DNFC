@@ -1,18 +1,24 @@
 #include "hazardpointer.hpp"
 
 template <typename T>
+inline typename HazardPointer<T>::HazardPointerRecord *get_myhp()
+{
+      thread_local static HazardPointerRecord *myhp;
+      return myhp;
+}
 
-thread_local HazardPointer<T>::HazardPointerRecord *myhp;
-
+template <typename T>
 inline unsigned int HazardPointer<T>::get_batch_size()
 {
       return (this->nbhp.load(std::memory_order_relaxed) * this->nbpointers * 2) + this->nbhp.load(std::memory_order_relaxed);
 };
 
+template <typename T>
 void HazardPointer<T>::subscribe()
 {
       // First try to reuse a retire HP record
       bool expected = false;
+      HazardPointerRecord *myhp = this->get_myhp();
       for (HazardPointerRecord *i = this->head; i; i = i->next)
       {
             if (i->active.load(std::memory_order_relaxed) ||
@@ -40,23 +46,29 @@ void HazardPointer<T>::subscribe()
             ;
 }
 
+template <typename T>
 void HazardPointer<T>::unsubscribe()
 {
+      HazardPointerRecord *myhp = this->get_myhp();
       if (!myhp)
             return;
       myhp->hp.clear();
       myhp->active = false;
 }
 
-T *HazardPointer<T>::get_pointer(int index)
+template <typename T>
+T *HazardPointer<T>::get_pointer(const int &index)
 {
+      HazardPointerRecord *myhp = this->get_myhp();
       if (!myhp || index >= this->nbpointers)
             return NULL;
       return &(myhp)->hp[index];
 }
 
-void HazardPointer<T>::delete_node(void *node)
+template <typename T>
+void HazardPointer<T>::delete_node(const T *node)
 {
+      HazardPointerRecord *myhp = this->get_myhp();
       if (!myhp)
             return;
       myhp->rList.push_front(node);
@@ -69,9 +81,11 @@ void HazardPointer<T>::delete_node(void *node)
 
 /*                Private function                     */
 
+template <typename T>
 void HazardPointer<T>::scan()
 {
       // Stage 1
+      HazardPointerRecord *myhp = this->get_myhp();
       std::vector<void *> plist;
       for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
       {
@@ -100,9 +114,11 @@ void HazardPointer<T>::scan()
       }
 }
 
+template <typename T>
 void HazardPointer<T>::help_scan()
 {
       bool expected = false;
+      HazardPointerRecord *myhp = this->get_myhp();
       for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed; i; i = i->next)
       {
             // Trying to lock the next non-used hazard pointer record
