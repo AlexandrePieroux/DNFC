@@ -1,20 +1,13 @@
 #include "linkedlistlf.hpp"
 
-/*                                     Private per thread variables                                           */
-
 template <typename K, typename H, typename D>
-thread_local LinkedListLf<K, H, D> *cur;
-thread_local LinkedListLf<K, H, D> *prev;
-thread_local LinkedListLf<K, H, D> *next;
-
-/*                                     Private per thread variables                                           */
-
-LinkedListLf<K, H, D> *LinkedListLf::insert(const D *data, const K *key)
+LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::insert(const D &data, const K &key)
 {
   return this->insert(data, key, key);
 }
 
-LinkedListLf<K, H, D> *LinkedListLf::insert(const D *data, const K *key, const H *hash)
+template <typename K, typename H, typename D>
+LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::insert(const D &data, const K &key, const H &hash)
 {
   // Hazard pointers
   this->hp->subscribe();
@@ -23,6 +16,8 @@ LinkedListLf<K, H, D> *LinkedListLf::insert(const D *data, const K *key, const H
   std::atomic<LinkedListLf<K, H, D> *> *nexthp = this->hp->get_pointer(NEXT);
 
   // Private per thread variables
+  LinkedListLf<K, H, D> *cur = this->get_cur();
+
   LinkedListLf<K, H, D> *result = nullptr;
 
   for (;;)
@@ -54,18 +49,23 @@ LinkedListLf<K, H, D> *LinkedListLf::insert(const D *data, const K *key, const H
   return result;
 }
 
-LinkedListLf<K, H, D> *LinkedListLf::get(const K *key)
+template <typename K, typename H, typename D>
+LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::get(const K &key)
 {
   return this->get(key, key);
 }
 
-LinkedListLf<K, H, D> *LinkedListLf::get(const K *key, const H *hash)
+template <typename K, typename H, typename D>
+LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::get(const K &key, const H &hash)
 {
   // Hazard pointers
   this->hp->subscribe();
   std::atomic<LinkedListLf<K, H, D> *> prevhp = this->hp->get_pointer(PREV);
   std::atomic<LinkedListLf<K, H, D> *> curhp = this->hp->get_pointer(CUR);
   std::atomic<LinkedListLf<K, H, D> *> nexthp = this->hp->get_pointer(NEXT);
+
+  // Private per thread variables
+  LinkedListLf<K, H, D> *cur = this->get_cur();
 
   LinkedListLf<K, H, D> *result = nullptr;
   if (this->find(key, hash))
@@ -81,18 +81,25 @@ LinkedListLf<K, H, D> *LinkedListLf::get(const K *key, const H *hash)
   return result;
 }
 
-bool LinkedListLf::delete_item(const K *key)
+template <typename K, typename H, typename D>
+bool LinkedListLf<K, H, D>::delete_item(const K &key)
 {
   return this->delete_item(k, k);
 }
 
-bool LinkedListLf::delete_item(const K *key, const H *hash)
+template <typename K, typename H, typename D>
+bool LinkedListLf<K, H, D>::delete_item(const K &key, const H &hash)
 {
   // Hazard pointers
   this->hp->subscribe();
   std::atomic<LinkedListLf<K, H, D> *> *prevhp = this->hp->get_pointer(PREV);
   std::atomic<LinkedListLf<K, H, D> *> *curhp = this->hp->get_pointer(CUR);
   std::atomic<LinkedListLf<K, H, D> *> *nexthp = this->hp->get_pointer(NEXT);
+
+  // Private per thread variables
+  LinkedListLf<K, H, D> *cur = this->get_cur();
+  LinkedListLf<K, H, D> *prev = this->get_prev();
+  LinkedListLf<K, H, D> *next = this->get_next();
 
   bool result;
 
@@ -132,12 +139,39 @@ bool LinkedListLf::delete_item(const K *key, const H *hash)
 
 /*                                     Private function                                               */
 
-bool LinkedListLf::find(K key, H hash)
+template <typename K, typename H, typename D>
+inline typename LinkedListLf<K, H, D> *get_cur()
+{
+  thread_local static LinkedListLf<K, H, D> *cur;
+  return cur;
+}
+
+template <typename K, typename H, typename D>
+inline typename LinkedListLf<K, H, D> *get_prev()
+{
+  thread_local static LinkedListLf<K, H, D> *prev;
+  return prev;
+}
+
+template <typename K, typename H, typename D>
+inline typename LinkedListLf<K, H, D> *get_next()
+{
+  thread_local static LinkedListLf<K, H, D> *next;
+  return next;
+}
+
+template <typename K, typename H, typename D>
+bool LinkedListLf<K, H, D>::find(const K &key, const H &hash)
 {
   // Hazard pointers
   std::atomic<LinkedListLf<K, H, D> *> *prevhp = this->hp->get_pointer(PREV);
   std::atomic<LinkedListLf<K, H, D> *> *curhp = this->hp->get_pointer(CUR);
   std::atomic<LinkedListLf<K, H, D> *> *nexthp = this->hp->get_pointer(NEXT);
+
+  // Private per thread variables
+  LinkedListLf<K, H, D> *cur = this->get_cur();
+  LinkedListLf<K, H, D> *prev = this->get_prev();
+  LinkedListLf<K, H, D> *next = this->get_next();
 
   for (;;)
   {
@@ -145,7 +179,7 @@ bool LinkedListLf::find(K key, H hash)
     cur = prev->get_clear_pointer();
     curhp->store(cur, std::memory_order_relaxed);
 
-    if (*prev != *cur_p) // ??
+    if (prev != cur)
       continue;
 
     for (;;)
@@ -156,13 +190,13 @@ bool LinkedListLf::find(K key, H hash)
       next = cur->next.load(std::memory_order_relaxed);
       nexthp->store(next->get_clear_pointer(), std::memory_order_relaxed);
 
-      if (cur->next.load(std::memory_order_relaxed) != *next)
+      if (cur->next.load(std::memory_order_relaxed) != next)
         break;
 
       K ckey = cur->key;
       H chash = cur->hash;
 
-      if (*prev != cur->get_clear_pointer()) // ??
+      if (prev != cur->get_clear_pointer())
         break;
 
       if (!cur->get_mark())
@@ -174,10 +208,8 @@ bool LinkedListLf::find(K key, H hash)
       }
       else
       {
-        struct linked_list *cur_cleared = get_clear_pointer(*cur_p);
-
-        if(prev->next->compare_exchange_strong(cur, next,
-                                               std::memory_order_acquire, std::memory_order_relaxed))
+        if (prev->next->compare_exchange_strong(cur, next,
+                                                std::memory_order_acquire, std::memory_order_relaxed))
           this->hp->delete_node(cur);
         else
           break;
@@ -186,20 +218,22 @@ bool LinkedListLf::find(K key, H hash)
       cur = curhp->load(std::memory_order_relaxed);
     }
   }
-  return false; // Never happen
 }
 
-uintptr_t LinkedListLf::get_mark();
+template <typename K, typename H, typename D>
+uintptr_t LinkedListLf<K, H, D>::get_mark();
 {
   return (uintptr_t)(list->next) & 0x1;
 }
 
-LinkedListLf<K, H, D> *LinkedListLf::mark_pointer()
+template <typename K, typename H, typename D>
+LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::mark_pointer()
 {
   return (struct linked_list *)(((uintptr_t)list) | 1);
 }
 
-LinkedListLf<K, H, D> *LinkedListLf::get_clear_pointer()
+template <typename K, typename H, typename D>
+LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::get_clear_pointer()
 {
   return (struct linked_list *)(((uintptr_t)this) & ~((uintptr_t)0x1));
 }
