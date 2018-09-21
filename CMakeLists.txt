@@ -5,6 +5,7 @@ set (CMAKE_CXX_STANDARD 11)
 # Must use GNUInstallDirs to install libraries into correct
 # locations on all platforms.
 include(GNUInstallDirs)
+include(FetchContent)
 
 # POSIX thread library
 find_package(Threads REQUIRED)
@@ -29,7 +30,7 @@ FetchContent_Declare(
 FetchContent_GetProperties(threadpool)
 if(NOT threadpool_POPULATED)
   FetchContent_Populate(threadpool)
-  include_directories()(${threadpool_SOURCE_DIR})
+  include_directories(${threadpool_SOURCE_DIR})
 endif()
 
 # Enable debug and include sub directory
