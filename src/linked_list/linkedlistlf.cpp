@@ -82,13 +82,13 @@ LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::get(const K &key, const H &hash)
 }
 
 template <typename K, typename H, typename D>
-bool LinkedListLf<K, H, D>::delete_item(const K &key)
+bool LinkedListLf<K, H, D>::remove(const K &key)
 {
   return this->delete_item(k, k);
 }
 
 template <typename K, typename H, typename D>
-bool LinkedListLf<K, H, D>::delete_item(const K &key, const H &hash)
+bool LinkedListLf<K, H, D>::remove(const K &key, const H &hash)
 {
   // Hazard pointers
   this->hp->subscribe();
@@ -140,21 +140,21 @@ bool LinkedListLf<K, H, D>::delete_item(const K &key, const H &hash)
 /*                                     Private function                                               */
 
 template <typename K, typename H, typename D>
-inline typename LinkedListLf<K, H, D> *get_cur()
+inline LinkedListLf<K, H, D> *get_cur()
 {
   thread_local static LinkedListLf<K, H, D> *cur;
   return cur;
 }
 
 template <typename K, typename H, typename D>
-inline typename LinkedListLf<K, H, D> *get_prev()
+inline LinkedListLf<K, H, D> *get_prev()
 {
   thread_local static LinkedListLf<K, H, D> *prev;
   return prev;
 }
 
 template <typename K, typename H, typename D>
-inline typename LinkedListLf<K, H, D> *get_next()
+inline LinkedListLf<K, H, D> *get_next()
 {
   thread_local static LinkedListLf<K, H, D> *next;
   return next;
@@ -223,19 +223,19 @@ bool LinkedListLf<K, H, D>::find(const K &key, const H &hash)
 template <typename K, typename H, typename D>
 uintptr_t LinkedListLf<K, H, D>::get_mark();
 {
-  return (uintptr_t)(list->next) & 0x1;
+  return (uintptr_t)(this->next) & 0x1;
 }
 
 template <typename K, typename H, typename D>
 LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::mark_pointer()
 {
-  return (struct linked_list *)(((uintptr_t)list) | 1);
+  return (LinkedListLf<K, H, D> *)(((uintptr_t)this) | 1);
 }
 
 template <typename K, typename H, typename D>
 LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::get_clear_pointer()
 {
-  return (struct linked_list *)(((uintptr_t)this) & ~((uintptr_t)0x1));
+  return (LinkedListLf<K, H, D> *)(((uintptr_t)this) & ~((uintptr_t)0x1));
 }
 
 /*                                     Private function                                               */
