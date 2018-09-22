@@ -38,6 +38,6 @@ private:
   LinkedListLf<K, H, D> *get_clear_pointer();
 
   HazardPointer<LinkedListLf<K, H, D>> *hp;
-}
+};
 
 #endif

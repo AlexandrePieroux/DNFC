@@ -14,7 +14,7 @@ file(GLOB_RECURSE TEST_SOURCES
 
 # Remove tests from source files
 foreach(test ${TEST_SOURCES})
-    list(REMOVE_ITEM SOURCES test)    
+    list(REMOVE_ITEM SOURCES ${test})    
 endforeach(test)
 
 # Add source files to DNFC library

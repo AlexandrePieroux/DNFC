@@ -34,7 +34,7 @@ std::vector<int> *get_random_numbers(int size)
   int im = 0;
   for (int in = 0; in < size && im < size; ++in)
   {
-    int r = rand() % (in + 1); 
+    int r = rand() % (in + 1);
     if (is_used[r])
       r = in;
 
@@ -46,10 +46,8 @@ std::vector<int> *get_random_numbers(int size)
 }
 
 template <class F, class... Args>
-auto test_iterations(F &&fun, Args &&... args)
+void test_iterations(F &&fun, Args &&... args)
 {
-  arguments_t **args;
-
   int steps_thread = RANGE_THREADS / NB_STEPS_THREADS;
   int steps_number = RANGE_NUMBERS / NB_STEPS_NUMBERS;
 
@@ -74,7 +72,7 @@ auto test_iterations(F &&fun, Args &&... args)
   }
 }
 
-arguments_t **& init(bool active_comparison)
+arguments_t **init(bool active_comparison)
 {
   // Init phase
   srand(time(NULL));
@@ -146,12 +144,12 @@ int job_remove(arguments_t *args)
 TEST(LinkedListTest, Insert)
 {
   arguments_t **args = init(true);
-  test_iterations([args]{
-    std::vector< std::future<int> > results;
+  test_iterations([args] {
+    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(&job_insert, args[i]));
-    for(auto && result: results)
-        result.get();
+    for (auto &&result : results)
+      result.get();
     results.clear();
   });
 }
@@ -159,18 +157,18 @@ TEST(LinkedListTest, Insert)
 TEST(LinkedListTest, Get)
 {
   arguments_t **args = init(true);
-  test_iterations([args]{
-    std::vector< std::future<int> > results;
+  test_iterations([args] {
+    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(&job_insert, args[i]));
-    for(auto && result: results)
-        result.get();
+    for (auto &&result : results)
+      result.get();
     results.clear();
 
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(&job_get, args[i]));
-    for(auto && result: results)
-        result.get();
+    for (auto &&result : results)
+      result.get();
     results.clear();
   });
 }
@@ -178,18 +176,18 @@ TEST(LinkedListTest, Get)
 TEST(LinkedListTest, Remove)
 {
   arguments_t **args = init(true);
-  test_iterations([args]{
-    std::vector< std::future<int> > results;
+  test_iterations([args] {
+    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(&job_insert, args[i]));
-    for(auto && result: results)
-        result.get();
+    for (auto &&result : results)
+      result.get();
     results.clear();
 
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(&job_remove, args[i]));
-    for(auto && result: results)
-        result.get();
+    for (auto &&result : results)
+      result.get();
     results.clear();
   });
 }
@@ -197,16 +195,16 @@ TEST(LinkedListTest, Remove)
 TEST(LinkedListTest, ConcurrentUpdates)
 {
   arguments_t **args = init(false);
-  test_iterations([args]{
-    std::vector< std::future<int> > results;
+  test_iterations([args] {
+    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
     {
       results.emplace_back(pool.enqueue(&job_insert, args[i]));
       results.emplace_back(pool.enqueue(&job_get, args[i]));
       results.emplace_back(pool.enqueue(&job_remove, args[i]));
     }
-    for(auto && result: results)
-        result.get();
+    for (auto &&result : results)
+      result.get();
     results.clear();
   });
 }

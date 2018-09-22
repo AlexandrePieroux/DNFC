@@ -3,7 +3,7 @@
 template <typename T>
 inline typename HazardPointer<T>::HazardPointerRecord *get_myhp()
 {
-      thread_local static HazardPointerRecord *myhp;
+      thread_local static typename HazardPointer<T>::HazardPointerRecord *myhp;
       return myhp;
 }
 
@@ -18,8 +18,8 @@ void HazardPointer<T>::subscribe()
 {
       // First try to reuse a retire HP record
       bool expected = false;
-      HazardPointerRecord *myhp = this->get_myhp();
-      for (HazardPointerRecord *i = this->head; i; i = i->next)
+      HazardPointer<T>::HazardPointerRecord *myhp = this->get_myhp();
+      for (HazardPointer<T>::HazardPointerRecord *i = this->head; i; i = i->next)
       {
             if (i->active.load(std::memory_order_relaxed) ||
                 !i->active.compare_exchange_strong(expected, true,
@@ -35,7 +35,7 @@ void HazardPointer<T>::subscribe()
       this->nbhp.fetch_add(this->nbpointers, std::memory_order_relaxed);
 
       // Allocate and push a new record
-      myhp = new HazardPointerRecord();
+      myhp = new HazardPointer<T>::HazardPointerRecord();
       myhp->next = this->head.load(std::memory_order_relaxed);
       myhp->active = true;
 
@@ -49,7 +49,7 @@ void HazardPointer<T>::subscribe()
 template <typename T>
 void HazardPointer<T>::unsubscribe()
 {
-      HazardPointerRecord *myhp = this->get_myhp();
+      HazardPointer<T>::HazardPointerRecord *myhp = this->get_myhp();
       if (!myhp)
             return;
       myhp->hp.clear();
@@ -59,7 +59,7 @@ void HazardPointer<T>::unsubscribe()
 template <typename T>
 T *HazardPointer<T>::get_pointer(const int &index)
 {
-      HazardPointerRecord *myhp = this->get_myhp();
+      HazardPointer<T>::HazardPointerRecord *myhp = this->get_myhp();
       if (!myhp || index >= this->nbpointers)
             return NULL;
       return &(myhp)->hp[index];
@@ -68,7 +68,7 @@ T *HazardPointer<T>::get_pointer(const int &index)
 template <typename T>
 void HazardPointer<T>::delete_node(const T *node)
 {
-      HazardPointerRecord *myhp = this->get_myhp();
+      HazardPointer<T>::HazardPointerRecord *myhp = this->get_myhp();
       if (!myhp)
             return;
       myhp->rList.push_front(node);
@@ -85,9 +85,9 @@ template <typename T>
 void HazardPointer<T>::scan()
 {
       // Stage 1
-      HazardPointerRecord *myhp = this->get_myhp();
+      HazardPointer<T>::HazardPointerRecord *myhp = this->get_myhp();
       std::vector<void *> plist;
-      for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
+      for (HazardPointer<T>::HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
       {
             for (const std::atomic<T *> &e : i->hp)
             {
@@ -96,7 +96,7 @@ void HazardPointer<T>::scan()
                         plist.push_back(hp);
             }
       }
-      if (plist.size <= 0)
+      if (plist.size() <= 0)
             return;
 
       // Stage 2
@@ -118,8 +118,8 @@ template <typename T>
 void HazardPointer<T>::help_scan()
 {
       bool expected = false;
-      HazardPointerRecord *myhp = this->get_myhp();
-      for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed; i; i = i->next)
+      HazardPointer<T>::HazardPointerRecord *myhp = this->get_myhp();
+      for (HazardPointer<T>::HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
       {
             // Trying to lock the next non-used hazard pointer record
             if (i->active.load(std::memory_order_relaxed) ||

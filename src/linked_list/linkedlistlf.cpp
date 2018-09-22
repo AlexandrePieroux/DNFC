@@ -84,7 +84,7 @@ LinkedListLf<K, H, D> *LinkedListLf<K, H, D>::get(const K &key, const H &hash)
 template <typename K, typename H, typename D>
 bool LinkedListLf<K, H, D>::remove(const K &key)
 {
-  return this->delete_item(k, k);
+  return this->delete_item(key, key);
 }
 
 template <typename K, typename H, typename D>
@@ -185,7 +185,7 @@ bool LinkedListLf<K, H, D>::find(const K &key, const H &hash)
     for (;;)
     {
       if (!cur)
-        return nullptr;
+        return false;
 
       next = cur->next.load(std::memory_order_relaxed);
       nexthp->store(next->get_clear_pointer(), std::memory_order_relaxed);
@@ -221,7 +221,7 @@ bool LinkedListLf<K, H, D>::find(const K &key, const H &hash)
 }
 
 template <typename K, typename H, typename D>
-uintptr_t LinkedListLf<K, H, D>::get_mark();
+uintptr_t LinkedListLf<K, H, D>::get_mark()
 {
   return (uintptr_t)(this->next) & 0x1;
 }
