@@ -19,8 +19,8 @@ public:
   LinkedListLf<K, H, D> *get(const K &key, const H &hash);
   bool remove(const K &key);
   bool remove(const K &key, const H &hash);
-  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> &hptr, const K &k, const H &h, const D &d) : hp(hptr), key(k), hash(h), data(d){};
-  LinkedListLf<K, H, D>(const K &k, const H &h, const D &d) : hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)), key(k), hash(h), data(d){};
+  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> &hptr, const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
+  LinkedListLf<K, H, D>(const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
   ~LinkedListLf(){};
 
   std::atomic<LinkedListLf<K, H, D> *> *next;

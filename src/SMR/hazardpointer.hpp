@@ -23,7 +23,7 @@ public:
   T *get_pointer(const int &index);
   void delete_node(const T *node);
 
-  HazardPointer(int a) : nbpointers(a), nbhp(0), head(nullptr){};
+  HazardPointer(int a) : head(nullptr), nbhp(0), nbpointers(a){};
   ~HazardPointer(){};
 
 private:
