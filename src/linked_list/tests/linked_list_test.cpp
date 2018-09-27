@@ -106,7 +106,7 @@ int job_insert(arguments_t *args)
   LinkedListLf<int, int, int> *result;
   for (int i = 0; i < args->numbers->size(); ++i)
   {
-    result = table->insert((*args->numbers)[i], args->start_index + i, (*args->numbers)[i]);
+    result = table->insert((*args->numbers)[i], args->start_index + i);
     if (args->active_comparison)
     {
       EXPECT_EQ(result->data, (*args->numbers)[i]);
@@ -122,7 +122,7 @@ int job_get(arguments_t *args)
   LinkedListLf<int, int, int> *item;
   for (int i = 0; i < args->numbers->size(); ++i)
   {
-    item = table->get(args->start_index + i, (*args->numbers)[i]);
+    item = table->get(args->start_index + i);
     if (args->active_comparison)
       EXPECT_EQ(item->key, (*args->numbers)[i]);
   }
@@ -134,7 +134,7 @@ int job_remove(arguments_t *args)
   bool result;
   for (int i = 0; i < args->numbers->size(); ++i)
   {
-    result = table->remove(args->start_index + i, (*args->numbers)[i]);
+    result = table->remove(args->start_index + i);
     if (args->active_comparison)
       EXPECT_TRUE(result);
   }
