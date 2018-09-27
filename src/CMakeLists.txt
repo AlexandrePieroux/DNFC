@@ -4,6 +4,10 @@ project(dnfclib)
 # Recursively get all source files
 file(GLOB_RECURSE SOURCES 
     "*.cpp"
+)
+
+# Get header files
+file(GLOB_RECURSE HEADERS 
     "*.hpp"
 )
 
@@ -17,8 +21,12 @@ foreach(test ${TEST_SOURCES})
     list(REMOVE_ITEM SOURCES ${test}) 
 endforeach(test)
 
-# Add source files to DNFC library and include directories
-add_library(DNFC SHARED ${SOURCES})
+# Get include directories
+foreach(header_file ${HEADERS})
+    get_filename_component(_dir ${header_file} PATH)
+    list (APPEND INCLUDE_DIR ${_dir})
+endforeach(header_file)
+list(REMOVE_DUPLICATES INCLUDE_DIR)
 
 # Scan for tests
 foreach(test ${TEST_SOURCES})
@@ -30,10 +38,8 @@ foreach(test ${TEST_SOURCES})
 
     # Create test executable
     add_executable(${TESTNAME} ${test})
-
-    # Add DNFC library as depence
+    target_include_directories(${TESTNAME} PRIVATE ${INCLUDE_DIR})
     target_link_libraries(${TESTNAME} 
-                          DNFC
                           gtest gtest_main)
 
     # Add test

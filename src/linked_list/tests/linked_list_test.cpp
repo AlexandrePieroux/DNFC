@@ -3,10 +3,10 @@
 #include <stdlib.h>
 #include <chrono>
 
-#include "../linkedlistlf.hpp"
-
 #include "gtest/gtest.h"
 #include "ThreadPool.h"
+
+#include "../linkedlistlf.hpp"
 
 #define RANGE_NUMBERS 10000
 #define NB_STEPS_NUMBERS 10
@@ -147,7 +147,7 @@ TEST(LinkedListTest, Insert)
   test_iterations([args] {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(&job_insert, args[i]));
+      results.emplace_back(pool.enqueue(job_insert, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
@@ -160,13 +160,13 @@ TEST(LinkedListTest, Get)
   test_iterations([args] {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(&job_insert, args[i]));
+      results.emplace_back(pool.enqueue(job_insert, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
 
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(&job_get, args[i]));
+      results.emplace_back(pool.enqueue(job_get, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
@@ -179,13 +179,13 @@ TEST(LinkedListTest, Remove)
   test_iterations([args] {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(&job_insert, args[i]));
+      results.emplace_back(pool.enqueue(job_insert, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
 
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(&job_remove, args[i]));
+      results.emplace_back(pool.enqueue(job_remove, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
