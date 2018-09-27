@@ -67,7 +67,7 @@ public:
     return myhp->hp[index].load(std::memory_order_relaxed);
   }
 
-  void store(const int &index, const T *value)
+  void store(const int &index, T *value)
   {
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp || index >= this->nbpointers)
@@ -75,13 +75,13 @@ public:
     myhp->hp[index].store(value, std::memory_order_relaxed);
   }
 
-  void delete_node(const T *node)
+  void delete_node(T *node)
   {
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp)
       return;
-    myhp->rList.push_front(node);
-    if (myhp->rList.size >= this->get_batch_size())
+    myhp->rlist.push_front(node);
+    if (myhp->rlist.size() >= this->get_batch_size())
     {
       this->scan();
       this->help_scan();
@@ -107,12 +107,12 @@ private:
   {
     // Stage 1
     HazardPointerRecord *myhp = this->get_myhp();
-    std::vector<void *> plist;
+    std::vector<T *> plist;
     for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
     {
       for (const std::atomic<T *> &e : i->hp)
       {
-        std::atomic<T *> hp = e->load(std::memory_order_relaxed);
+        T *hp = e.load(std::memory_order_relaxed);
         if (hp)
           plist.push_back(hp);
       }
@@ -121,17 +121,17 @@ private:
       return;
 
     // Stage 2
-    std::sort(plist, plist);
-    std::list<T *> localRList = myhp->rList;
-    myhp->rList.clear();
+    std::sort(plist.begin(), plist.end());
+    std::list<T *> localRList = myhp->rlist;
+    myhp->rlist.clear();
 
     // Stage 3
-    for (const T *&e : localRList)
+    for (T *e : localRList)
     {
-      if (std::binary_search(plist.begin(), plist.end(), *e))
-        myhp->rList.push_front(*e);
+      if (std::binary_search(plist.begin(), plist.end(), e))
+        myhp->rlist.push_front(e);
       else
-        delete *e;
+        delete e;
     }
   }
 
@@ -147,13 +147,13 @@ private:
                                              std::memory_order_acquire, std::memory_order_relaxed))
         continue;
 
-      // Inserting the rList of the node in myhp
-      for (const T *&e : i->rList)
+      // Inserting the rlist of the node in myhp
+      for (T *e : i->rlist)
       {
-        myhp->rList.push_front(*(T **)e);
+        myhp->rlist.push_front(e);
 
         // scan if we reached the threshold
-        if (myhp->rList.size >= this->get_batch_size())
+        if (myhp->rlist.size() >= this->get_batch_size())
           this->scan();
       }
       // Release the record

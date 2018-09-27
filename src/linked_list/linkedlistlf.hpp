@@ -36,12 +36,13 @@ public:
       }
 
       LinkedListLf<K, H, D> *item = new LinkedListLf<K, H, D>(this->hp, key, hash, data);
-      LinkedListLf<K, H, D> *nexttmp = cur->next;
+      std::atomic<LinkedListLf<K, H, D> *> nexttmp;
+      nexttmp.store(cur->next.load(std::memory_order_relaxed), std::memory_order_relaxed);
       LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
       item->next = curcleared;
 
-      if (!nexttmp->compare_exchange_strong(curcleared, item,
-                                            std::memory_order_acquire, std::memory_order_relaxed))
+      if (!nexttmp.compare_exchange_strong(curcleared, item,
+                                           std::memory_order_acquire, std::memory_order_relaxed))
       {
         result = item;
         break;
@@ -104,12 +105,12 @@ public:
       LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
       LinkedListLf<K, H, D> *curnext = cur->next;
 
-      if (!cur->next->compare_exchange_strong(nextcleared, nextmarked,
-                                              std::memory_order_acquire, std::memory_order_relaxed))
+      if (!cur->next.compare_exchange_strong(nextcleared, nextmarked,
+                                             std::memory_order_acquire, std::memory_order_relaxed))
         continue;
 
-      if (prev->next->compare_exchange_strong(cur, nextcleared,
-                                              std::memory_order_acquire, std::memory_order_relaxed))
+      if (prev->next.compare_exchange_strong(cur, nextcleared,
+                                             std::memory_order_acquire, std::memory_order_relaxed))
         this->hp->delete_node(cur);
       else
         this->find(key, hash);
@@ -122,11 +123,11 @@ public:
     return result;
   }
 
-  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> &hptr, const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
+  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *hptr, const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
   LinkedListLf<K, H, D>(const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
   ~LinkedListLf(){};
 
-  LinkedListLf<K, H, D> *next;
+  std::atomic<LinkedListLf<K, H, D> *> next;
   K key;
   H hash;
   D data;
@@ -159,7 +160,7 @@ private:
 
     for (;;)
     {
-      prev = this->next->load(std::memory_order_relaxed);
+      prev = this->next.load(std::memory_order_relaxed);
       cur = prev->get_clear_pointer();
       this->hp->store(CUR, cur);
 
@@ -192,8 +193,8 @@ private:
         }
         else
         {
-          if (prev->next->compare_exchange_strong(cur, next,
-                                                  std::memory_order_acquire, std::memory_order_relaxed))
+          if (prev->next.compare_exchange_strong(cur, next,
+                                                 std::memory_order_acquire, std::memory_order_relaxed))
             this->hp->delete_node(cur);
           else
             break;
@@ -211,7 +212,7 @@ private:
 
   uintptr_t get_mark()
   {
-    return (uintptr_t)(this->next) & 0x1;
+    return (uintptr_t)(&this->next) & 0x1;
   }
 
   LinkedListLf<K, H, D> *get_clear_pointer()
