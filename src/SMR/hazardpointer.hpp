@@ -72,6 +72,8 @@ public:
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp || index >= this->nbpointers)
       return;
+    if (!myhp->hp[index])
+       myhp->hp[index] = std::atomic<T>();
     myhp->hp[index].store(value, std::memory_order_relaxed);
   }
 
@@ -79,6 +81,7 @@ public:
   {
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp)
+       
       return;
     myhp->rlist.push_front(node);
     if (myhp->rlist.size() >= this->get_batch_size())
@@ -95,6 +98,8 @@ private:
   inline HazardPointerRecord *get_myhp()
   {
     thread_local static HazardPointerRecord *myhp;
+    if (!myhp)
+      myhp = new HazardPointerRecord;
     return myhp;
   }
 

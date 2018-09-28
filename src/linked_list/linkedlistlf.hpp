@@ -36,13 +36,11 @@ public:
       }
 
       LinkedListLf<K, H, D> *item = new LinkedListLf<K, H, D>(this->hp, key, hash, data);
-      std::atomic<LinkedListLf<K, H, D> *> nexttmp;
-      nexttmp.store(cur->next.load(std::memory_order_relaxed), std::memory_order_relaxed);
       LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
       item->next = curcleared;
 
-      if (!nexttmp.compare_exchange_strong(curcleared, item,
-                                           std::memory_order_acquire, std::memory_order_relaxed))
+      if (!cur->next.compare_exchange_strong(curcleared, item,
+                                             std::memory_order_acquire, std::memory_order_relaxed))
       {
         result = item;
         break;
@@ -103,7 +101,6 @@ public:
 
       LinkedListLf<K, H, D> *nextmarked = next->mark_pointer();
       LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
-      LinkedListLf<K, H, D> *curnext = cur->next;
 
       if (!cur->next.compare_exchange_strong(nextcleared, nextmarked,
                                              std::memory_order_acquire, std::memory_order_relaxed))

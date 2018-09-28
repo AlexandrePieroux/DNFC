@@ -29,7 +29,7 @@ struct arguments_t
 
 std::vector<int> *get_random_numbers(int size)
 {
-  std::vector<int> *result = new std::vector<int>();
+  std::vector<int> *result = new std::vector<int>(size);
   bool is_used[size];
   int im = 0;
   for (int in = 0; in < size && im < size; ++in)
@@ -45,40 +45,11 @@ std::vector<int> *get_random_numbers(int size)
   return result;
 }
 
-template <class F, class... Args>
-void test_iterations(F &&fun, Args &&... args)
+arguments_t **init(const bool &active_comparison)
 {
-  int steps_thread = RANGE_THREADS / NB_STEPS_THREADS;
-  int steps_number = RANGE_NUMBERS / NB_STEPS_NUMBERS;
-
-  for (nb_threads = steps_thread; nb_threads <= RANGE_THREADS; nb_threads += steps_thread)
-  {
-    for (nb_numbers = steps_number; nb_numbers <= RANGE_NUMBERS; nb_numbers += steps_number)
-    {
-      std::cout << "[ ITERATION] "
-                << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers;
-
-      using return_type = typename std::result_of<F(Args...)>::type;
-      auto task = std::make_shared<std::packaged_task<return_type()>>(
-          std::bind(std::forward<F>(fun), std::forward<Args>(args)...));
-
-      auto start = std::chrono::high_resolution_clock::now();
-      (*task)();
-      auto end = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> elapsed = end - start;
-
-      std::cout << " - " << elapsed.count() << " s" << std::endl;
-    }
-  }
-}
-
-arguments_t **init(bool active_comparison)
-{
-  // Init phase
+  // Preparing the structure
   srand(time(NULL));
   std::vector<int> *numbers = get_random_numbers(nb_numbers);
-
-  // Preparing the structure
   arguments_t **args = new arguments_t *[nb_threads];
   table = new LinkedListLf<int, int, int>(0, 0, 0);
 
@@ -99,6 +70,30 @@ arguments_t **init(bool active_comparison)
     args[p]->active_comparison = active_comparison;
   }
   return args;
+}
+
+template <class F>
+void test_iterations(F &&fun, bool const &comparison)
+{
+  int steps_thread = RANGE_THREADS / NB_STEPS_THREADS;
+  int steps_number = RANGE_NUMBERS / NB_STEPS_NUMBERS;
+
+  for (nb_threads = steps_thread; nb_threads <= RANGE_THREADS; nb_threads += steps_thread)
+  {
+    for (nb_numbers = steps_number; nb_numbers <= RANGE_NUMBERS; nb_numbers += steps_number)
+    {
+      arguments_t **args = init(comparison);
+      std::cout << "[ ITERATION] "
+                << "Threads: " << nb_threads << " - Random numbers: " << nb_numbers;
+
+      auto start = std::chrono::high_resolution_clock::now();
+      fun(args);
+      auto end = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> elapsed = end - start;
+
+      std::cout << " - " << elapsed.count() << " s" << std::endl;
+    }
+  }
 }
 
 int job_insert(arguments_t *args)
@@ -143,21 +138,19 @@ int job_remove(arguments_t *args)
 
 TEST(LinkedListTest, Insert)
 {
-  arguments_t **args = init(true);
-  test_iterations([args] {
+  test_iterations([](arguments_t **args){
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(job_insert, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
-  });
+  }, true);
 }
 
 TEST(LinkedListTest, Get)
 {
-  arguments_t **args = init(true);
-  test_iterations([args] {
+  test_iterations([](arguments_t **args) {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(job_insert, args[i]));
@@ -170,13 +163,12 @@ TEST(LinkedListTest, Get)
     for (auto &&result : results)
       result.get();
     results.clear();
-  });
+  }, true);
 }
 
 TEST(LinkedListTest, Remove)
 {
-  arguments_t **args = init(true);
-  test_iterations([args] {
+  test_iterations([](arguments_t **args) {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(job_insert, args[i]));
@@ -189,13 +181,12 @@ TEST(LinkedListTest, Remove)
     for (auto &&result : results)
       result.get();
     results.clear();
-  });
+  }, true);
 }
 
 TEST(LinkedListTest, ConcurrentUpdates)
 {
-  arguments_t **args = init(false);
-  test_iterations([args] {
+  test_iterations([](arguments_t **args) {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
     {
@@ -206,7 +197,7 @@ TEST(LinkedListTest, ConcurrentUpdates)
     for (auto &&result : results)
       result.get();
     results.clear();
-  });
+  }, false);
 }
 
 int main(int argc, char **argv)
