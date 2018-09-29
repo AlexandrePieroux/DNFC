@@ -22,7 +22,7 @@ public:
   {
     // First try to reuse a retire HP record
     bool expected = false;
-    HazardPointerRecord *myhp = this->get_myhp();
+    HazardPointerRecord *&myhp = this->get_myhp();
     for (HazardPointerRecord *i = this->head; i; i = i->next)
     {
       if (i->active.load(std::memory_order_relaxed) ||
@@ -53,7 +53,7 @@ public:
 
   void unsubscribe()
   {
-    HazardPointerRecord *myhp = this->get_myhp();
+    HazardPointerRecord *&myhp = this->get_myhp();
     if (!myhp)
       return;
     // Clear hp
@@ -64,7 +64,7 @@ public:
 
   T *load(const int &index)
   {
-    HazardPointerRecord *myhp = this->get_myhp();
+    HazardPointerRecord *&myhp = this->get_myhp();
     if (!myhp || index >= this->nbpointers)
       return NULL;
     return myhp->hp[index].load(std::memory_order_relaxed);
@@ -72,7 +72,7 @@ public:
 
   void store(const int &index, T *value)
   {
-    HazardPointerRecord *myhp = this->get_myhp();
+    HazardPointerRecord *&myhp = this->get_myhp();
     if (!myhp || index >= this->nbpointers)
       return;
     myhp->hp[index].store(value, std::memory_order_relaxed);
@@ -80,7 +80,7 @@ public:
 
   void delete_node(T *node)
   {
-    HazardPointerRecord *myhp = this->get_myhp();
+    HazardPointerRecord *&myhp = this->get_myhp();
     if (!myhp)
       return;
     myhp->rlist.push_front(node);
@@ -95,9 +95,9 @@ public:
   ~HazardPointer(){};
 
 private:
-  inline HazardPointerRecord *get_myhp()
+  static inline HazardPointerRecord *&get_myhp()
   {
-    thread_local static HazardPointerRecord *myhp;
+    static thread_local HazardPointerRecord *myhp;
     return myhp;
   }
 

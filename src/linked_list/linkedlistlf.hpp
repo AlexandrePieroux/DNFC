@@ -66,10 +66,9 @@ public:
     LinkedListLf<K, H, D> *&cur = get_cur();
 
     LinkedListLf<K, H, D> *result = nullptr;
+
     if (this->find(key, hash))
-    {
       result = cur;
-    }
 
     this->hp->unsubscribe();
     return result;
@@ -123,7 +122,6 @@ public:
 
   LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *hptr, const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
   LinkedListLf<K, H, D>(const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
-  LinkedListLf<K, H, D>(){};
   ~LinkedListLf<K, H, D>(){};
 
   std::atomic<LinkedListLf<K, H, D> *> next;
@@ -185,7 +183,7 @@ private:
 
         if (!cur->get_mark())
         {
-          if (chash >= hash || key == ckey)
+          if (chash > hash || (key == ckey && chash == hash))
             return (key == ckey && chash == hash);
           prev = cur;
           this->hp->store(PREV, cur);

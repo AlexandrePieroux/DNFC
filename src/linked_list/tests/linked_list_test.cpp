@@ -8,10 +8,10 @@
 
 #include "../linkedlistlf.hpp"
 
-#define RANGE_NUMBERS 10000
-#define NB_STEPS_NUMBERS 10
+#define RANGE_NUMBERS 100
+#define NB_STEPS_NUMBERS 1
 
-#define RANGE_THREADS 8
+#define RANGE_THREADS 10
 #define NB_STEPS_THREADS 1
 
 int nb_numbers;
@@ -106,7 +106,7 @@ int job_insert(arguments_t *args)
     {
       EXPECT_EQ(result->data, (*args->numbers)[i]);
       EXPECT_EQ(result->key, args->start_index + i);
-      EXPECT_EQ(result->hash, (*args->numbers)[i]);
+      EXPECT_EQ(result->hash, args->start_index + i);
     }
   }
   return 1;
@@ -119,7 +119,11 @@ int job_get(arguments_t *args)
   {
     item = table->get(args->start_index + i);
     if (args->active_comparison)
-      EXPECT_EQ(item->key, (*args->numbers)[i]);
+    {
+        EXPECT_EQ(item->data, (*args->numbers)[i]);
+        EXPECT_EQ(item->key, args->start_index + i);
+        EXPECT_EQ(item->hash, args->start_index + i);
+    }
   }
   return 1;
 }
