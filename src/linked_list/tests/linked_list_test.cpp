@@ -138,14 +138,15 @@ int job_remove(arguments_t *args)
 
 TEST(LinkedListTest, Insert)
 {
-  test_iterations([](arguments_t **args){
+  test_iterations([](arguments_t **args) {
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
       results.emplace_back(pool.enqueue(job_insert, args[i]));
     for (auto &&result : results)
       result.get();
     results.clear();
-  }, true);
+  },
+                  true);
 }
 
 TEST(LinkedListTest, Get)
@@ -163,7 +164,8 @@ TEST(LinkedListTest, Get)
     for (auto &&result : results)
       result.get();
     results.clear();
-  }, true);
+  },
+                  true);
 }
 
 TEST(LinkedListTest, Remove)
@@ -181,7 +183,8 @@ TEST(LinkedListTest, Remove)
     for (auto &&result : results)
       result.get();
     results.clear();
-  }, true);
+  },
+                  true);
 }
 
 TEST(LinkedListTest, ConcurrentUpdates)
@@ -197,11 +200,17 @@ TEST(LinkedListTest, ConcurrentUpdates)
     for (auto &&result : results)
       result.get();
     results.clear();
-  }, false);
+  },
+                  false);
 }
 
 int main(int argc, char **argv)
 {
+  std::cout << std::boolalpha 
+            << "LinkedListLf<int, int, int>* is trivially copyable ? " 
+            << std::is_trivially_copyable<LinkedListLf<int, int, int>*>::value << " \n"
+            << "std::atomic<LinkedListLf<int, int, int>*> is lock free? "
+            << std::atomic<LinkedListLf<int, int, int>*>{}.is_lock_free() << "\n";
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

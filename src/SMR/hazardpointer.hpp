@@ -12,7 +12,7 @@ class HazardPointer
 public:
   struct HazardPointerRecord
   {
-    std::vector<std::atomic<T *>> hp;
+    std::atomic<T *> *hp;
     std::list<T *> rlist;
     std::atomic<bool> active;
     HazardPointerRecord *next;
@@ -40,6 +40,7 @@ public:
 
     // Allocate and push a new record
     myhp = new HazardPointerRecord();
+    myhp->hp = new std::atomic<T *>[this->nbpointers];
     myhp->next = this->head.load(std::memory_order_relaxed);
     myhp->active = true;
 
@@ -55,7 +56,9 @@ public:
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp)
       return;
-    myhp->hp.clear();
+    // Clear hp
+    for (int i = 0; i < this->nbpointers; i++)
+      myhp->hp[i].store(nullptr, std::memory_order_relaxed);
     myhp->active = false;
   }
 
@@ -72,8 +75,6 @@ public:
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp || index >= this->nbpointers)
       return;
-    if (!myhp->hp[index])
-       myhp->hp[index] = std::atomic<T>();
     myhp->hp[index].store(value, std::memory_order_relaxed);
   }
 
@@ -81,7 +82,6 @@ public:
   {
     HazardPointerRecord *myhp = this->get_myhp();
     if (!myhp)
-       
       return;
     myhp->rlist.push_front(node);
     if (myhp->rlist.size() >= this->get_batch_size())
@@ -98,8 +98,6 @@ private:
   inline HazardPointerRecord *get_myhp()
   {
     thread_local static HazardPointerRecord *myhp;
-    if (!myhp)
-      myhp = new HazardPointerRecord;
     return myhp;
   }
 
@@ -115,9 +113,9 @@ private:
     std::vector<T *> plist;
     for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
     {
-      for (const std::atomic<T *> &e : i->hp)
+      for (int j = 0; j < this->nbpointers; j++)
       {
-        T *hp = e.load(std::memory_order_relaxed);
+        T *hp = i->hp[j].load(std::memory_order_relaxed);
         if (hp)
           plist.push_back(hp);
       }
