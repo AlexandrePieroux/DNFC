@@ -23,7 +23,8 @@ public:
     this->hp->subscribe();
 
     // Private per thread variables
-    LinkedListLf<K, H, D> *cur = this->get_cur();
+    LinkedListLf<K, H, D> *&cur = get_cur();
+    LinkedListLf<K, H, D> *&prev = get_prev();
 
     LinkedListLf<K, H, D> *result = nullptr;
 
@@ -39,8 +40,8 @@ public:
       LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
       item->next = curcleared;
 
-      if (!cur->next.compare_exchange_strong(curcleared, item,
-                                             std::memory_order_acquire, std::memory_order_relaxed))
+      if (!prev->next.compare_exchange_strong(curcleared, item,
+                                              std::memory_order_acquire, std::memory_order_relaxed))
       {
         result = item;
         break;
@@ -62,7 +63,7 @@ public:
     this->hp->subscribe();
 
     // Private per thread variables
-    LinkedListLf<K, H, D> *cur = this->get_cur();
+    LinkedListLf<K, H, D> *&cur = get_cur();
 
     LinkedListLf<K, H, D> *result = nullptr;
     if (this->find(key, hash))
@@ -85,9 +86,9 @@ public:
     this->hp->subscribe();
 
     // Private per thread variables
-    LinkedListLf<K, H, D> *cur = this->get_cur();
-    LinkedListLf<K, H, D> *prev = this->get_prev();
-    LinkedListLf<K, H, D> *next = this->get_next();
+    LinkedListLf<K, H, D> *&cur = get_cur();
+    LinkedListLf<K, H, D> *&prev = get_prev();
+    LinkedListLf<K, H, D> *&next = get_next();
 
     bool result;
 
@@ -122,7 +123,8 @@ public:
 
   LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *hptr, const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
   LinkedListLf<K, H, D>(const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
-  ~LinkedListLf(){};
+  LinkedListLf<K, H, D>(){};
+  ~LinkedListLf<K, H, D>(){};
 
   std::atomic<LinkedListLf<K, H, D> *> next;
   K key;
@@ -130,38 +132,38 @@ public:
   D data;
 
 private:
-  inline LinkedListLf<K, H, D> *get_cur()
+  static inline LinkedListLf<K, H, D> *&get_cur()
   {
-    thread_local static LinkedListLf<K, H, D> *cur;
+    static thread_local LinkedListLf<K, H, D> *cur;
     return cur;
   }
 
-  inline LinkedListLf<K, H, D> *get_prev()
+  static inline LinkedListLf<K, H, D> *&get_prev()
   {
-    thread_local static LinkedListLf<K, H, D> *prev;
+    static thread_local LinkedListLf<K, H, D> *prev;
     return prev;
   }
 
-  inline LinkedListLf<K, H, D> *get_next()
+  static inline LinkedListLf<K, H, D> *&get_next()
   {
-    thread_local static LinkedListLf<K, H, D> *next;
+    static thread_local LinkedListLf<K, H, D> *next;
     return next;
   }
 
   bool find(const K &key, const H &hash)
   {
     // Private per thread variables
-    LinkedListLf<K, H, D> *cur = this->get_cur();
-    LinkedListLf<K, H, D> *prev = this->get_prev();
-    LinkedListLf<K, H, D> *next = this->get_next();
+    LinkedListLf<K, H, D> *&cur = get_cur();
+    LinkedListLf<K, H, D> *&prev = get_prev();
+    LinkedListLf<K, H, D> *&next = get_next();
 
     for (;;)
     {
-      prev = this->next.load(std::memory_order_relaxed);
-      cur = prev->get_clear_pointer();
-      this->hp->store(CUR, cur);
+      prev = this;
+      cur = this->next.load(std::memory_order_relaxed);
+      this->hp->store(CUR, cur->get_clear_pointer());
 
-      if (prev != cur)
+      if (prev->next.load(std::memory_order_relaxed) != cur->get_clear_pointer())
         continue;
 
       for (;;)
@@ -178,26 +180,28 @@ private:
         K ckey = cur->key;
         H chash = cur->hash;
 
-        if (prev != cur->get_clear_pointer())
+        if (prev->next.load(std::memory_order_relaxed) != cur->get_clear_pointer())
           break;
 
         if (!cur->get_mark())
         {
-          if (chash > hash || (key == ckey && chash == hash))
+          if (chash >= hash || key == ckey)
             return (key == ckey && chash == hash);
-          prev = cur->next.load(std::memory_order_relaxed);
+          prev = cur;
           this->hp->store(PREV, cur);
         }
         else
         {
-          if (prev->next.compare_exchange_strong(cur, next,
+          LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
+          LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
+          if (prev->next.compare_exchange_strong(curcleared, nextcleared,
                                                  std::memory_order_acquire, std::memory_order_relaxed))
             this->hp->delete_node(cur);
           else
             break;
         }
+        cur = next;
         this->hp->store(CUR, next);
-        cur = this->hp->load(CUR);
       }
     }
   }

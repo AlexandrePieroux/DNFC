@@ -160,7 +160,7 @@ private:
           this->scan();
       }
       // Release the record
-      i->active = false;
+      i->active.store(false, std::memory_order_relaxed);
     }
   }
 
