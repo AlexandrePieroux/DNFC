@@ -8,10 +8,10 @@
 
 #include "../linkedlistlf.hpp"
 
-#define RANGE_NUMBERS 100
+#define RANGE_NUMBERS 500
 #define NB_STEPS_NUMBERS 1
 
-#define RANGE_THREADS 10
+#define RANGE_THREADS 8
 #define NB_STEPS_THREADS 1
 
 int nb_numbers;

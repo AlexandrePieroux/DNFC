@@ -42,7 +42,7 @@ public:
     myhp = new HazardPointerRecord();
     myhp->hp = new std::atomic<T *>[this->nbpointers];
     myhp->next = this->head.load(std::memory_order_relaxed);
-    myhp->active = true;
+    myhp->active.store(true, std::memory_order_relaxed);
 
     // Add the new record to the list
     while (!this->head.compare_exchange_weak(myhp->next, myhp,
@@ -59,7 +59,7 @@ public:
     // Clear hp
     for (int i = 0; i < this->nbpointers; i++)
       myhp->hp[i].store(nullptr, std::memory_order_relaxed);
-    myhp->active = false;
+    myhp->active.store(false, std::memory_order_relaxed);
   }
 
   T *load(const int &index)
@@ -160,6 +160,7 @@ private:
           this->scan();
       }
       // Release the record
+      i->rlist.clear();
       i->active.store(false, std::memory_order_relaxed);
     }
   }

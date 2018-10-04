@@ -40,8 +40,8 @@ public:
       LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
       item->next = curcleared;
 
-      if (!prev->next.compare_exchange_strong(curcleared, item,
-                                              std::memory_order_acquire, std::memory_order_relaxed))
+      if (prev->next.compare_exchange_strong(curcleared, item,
+                                             std::memory_order_acquire, std::memory_order_relaxed))
       {
         result = item;
         break;
@@ -168,9 +168,10 @@ private:
       {
         if (!cur)
           return false;
-
+            
         next = cur->next.load(std::memory_order_relaxed);
-        this->hp->store(NEXT, next->get_clear_pointer());
+        LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
+        this->hp->store(NEXT, nextcleared);
 
         if (cur->next.load(std::memory_order_relaxed) != next)
           break;
@@ -191,22 +192,21 @@ private:
         else
         {
           LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
-          LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
           if (prev->next.compare_exchange_strong(curcleared, nextcleared,
                                                  std::memory_order_acquire, std::memory_order_relaxed))
             this->hp->delete_node(cur);
           else
             break;
         }
-        cur = next;
-        this->hp->store(CUR, next);
+        cur = nextcleared;
+        this->hp->store(CUR, nextcleared);
       }
     }
   }
 
   LinkedListLf<K, H, D> *mark_pointer()
   {
-    return (LinkedListLf<K, H, D> *)(((uintptr_t)this) | 1);
+    return (LinkedListLf<K, H, D> *)(((uintptr_t)this) | 0x1);
   }
 
   uintptr_t get_mark()
