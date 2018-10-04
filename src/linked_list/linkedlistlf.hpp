@@ -211,7 +211,7 @@ private:
 
   uintptr_t get_mark()
   {
-    return (uintptr_t)(&this->next) & 0x1;
+    return (uintptr_t)(this->next.load(std::memory_order_relaxed)) & 0x1;
   }
 
   LinkedListLf<K, H, D> *get_clear_pointer()
