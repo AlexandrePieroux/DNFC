@@ -12,7 +12,7 @@
 #define NB_STEPS_NUMBERS 4
 
 #define RANGE_THREADS 8
-#define NB_STEPS_THREADS 4
+#define NB_STEPS_THREADS 2
 
 int nb_numbers;
 int nb_threads;
