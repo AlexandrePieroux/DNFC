@@ -7,7 +7,7 @@
 #include <cstddef>
 
 template <typename K>
-uint32_t murmurhash3_new(const K &key)
+uint32_t murmurhash3(const K &key)
 {
    const unsigned char *data = reinterpret_cast<const unsigned char *>(std::addressof(key));
    const int nblocks = sizeof(K) / 4;
@@ -53,12 +53,12 @@ uint32_t murmurhash3_new(const K &key)
    return h1;
 }
 
-static uint32_t rotl32(uint32_t x, const int8_t &r)
+inline static uint32_t rotl32(uint32_t x, const int8_t &r)
 {
    return (x << r) | (x >> (32 - r));
 }
 
-static uint32_t fmix32(uint32_t h)
+inline static uint32_t fmix32(uint32_t h)
 {
    h ^= h >> 16;
    h *= 0x85ebca6b;

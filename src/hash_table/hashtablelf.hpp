@@ -25,9 +25,7 @@ class HashTableLf
 
       bool insert(const K &key, const D &value)
       {
-            uint32_t pre_hash;
-            std::array<byte> key_bytes = to_byte(key);
-            murmurhash3(key_bytes, key_bytes.size(), &pre_hash);
+            uint32_t pre_hash = murmurhash3(key);
             uint32_t hash = this->compress(pre_hash);
             LinkedListLf<K, uint32_t, D> *bucket = this->get_bucket(hash);
             if (!bucket)
@@ -47,6 +45,33 @@ class HashTableLf
             return true;
       }
 
+      D get(const K &key)
+      {
+            uint32_t pre_hash = murmurhash3(key);
+            uint32_t hash = this->compress(pre_hash);
+            LinkedListLf<K, uint32_t, D> *bucket = this->get_bucket(hash);
+            if (!bucket)
+                  bucket = thi->init_bucket(hash);
+            LinkedListLf<K, uint32_t, D> *result = bucket->get(key, so_regular(pre_hash));
+            if (result)
+                  return result->data;
+            else
+                  return NULL;
+      }
+
+      bool remove(const K &key)
+      {
+            uint32_t pre_hash = murmurhash3(key);
+            uint32_t hash = this->compress(pre_hash);
+            LinkedListLf<K, uint32_t, D> *bucket = this->get_bucket(hash);
+            if (!bucket)
+                  bucket = this->init_bucket(hash);
+            if (!bucket->remove(key, so_regular(pre_hash)))
+                  return false;
+            table->nb_elements--;
+            return true;
+      }
+
       HashTableLf<T>() : size(1), nb_elements(0), index(new std::atomic<std::atomic<LinkedListLf<K, uint32_t, D> *> *>[32])
       {
             this->index[0] = new std::atomic<LinkedListLf<K, uint32_t, D> *>(new LinkedListLf<K, uint32_t, D>(0, 0, nullptr));
@@ -54,16 +79,7 @@ class HashTableLf
       ~HashTableLf<T>(){};
 
     private:
-      static const unsigned std::byte bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
-
-      static K &from_word(const uint32_t hash)
-      {
-            K object;
-            static_assert(std::is_trivially_copyable<K>::value, "not a TriviallyCopyable type");
-            uint32_t *begin_object = reinterpret_cast<uint32_t *>(std::addressof(object));
-            std::copy(std::begin(hash), std::end(hash), begin_object);
-            return object;
-      }
+      static const unsigned char bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
 
       static uint32_t pow_2(uint32_t e)
       {
@@ -71,17 +87,11 @@ class HashTableLf
             return (m << e);
       }
 
-      static uint32_t compress(uint32_t v, uint32_t l)
-      {
-            uint32_t m = pow_2(l) - 1;
-            return (v & m);
-      }
-
       static uint32_t reverse_bits(uint32_t v)
       {
             uint32_t c = 0;
-            std::byte *p = (std::byte *)&v;
-            std::byte *q = (std::byte *)&c;
+            unsigned char *p = (unsigned char *)&v;
+            unsigned char *q = (unsigned char *)&c;
             q[3] = bits_table[p[0]];
             q[2] = bits_table[p[1]];
             q[1] = bits_table[p[2]];
@@ -115,6 +125,12 @@ class HashTableLf
             return 0;
       }
 
+      uint32_t compress(uint32_t v)
+      {
+            uint32_t m = pow_2(this->size.load(std::memory_order_relaxed)) - 1;
+            return (v & m);
+      }
+
       LinkedListLf<K, uint32_t, D> *get_bucket(uint32_t hash)
       {
             uint32_t segment_index = get_segment_index(hash);
@@ -145,82 +161,16 @@ class HashTableLf
             if (!bucket)
                   bucket = this->init_bucket(parent);
             uint32_t so_hash = so_dummy(hash);
-            LinkedListLf<K, uint32_t, D> *dummy = new LinkedListLf<K, uint32_t, D>(from_byte(so_hash), so_hash, nullptr);
-            LinkedListLf<K, uint32_t, D> *result = bucket->(dummy);
+            LinkedListLf<K, uint32_t, D> *dummy = new LinkedListLf<K, uint32_t, D>(reinterpret_cast<K>(so_hash), so_hash, nullptr); /* /!\  */
+            LinkedListLf<K, uint32_t, D> *result = bucket->insert(dummy);
             if (result != dummy)
             {
                   delete (dummy);
                   dummy = result;
             }
-            set_bucket(dummy, hash, table);
+            this->set_bucket(dummy, hash);
             return dummy;
       }
 }
-
-bool
-hash_table_put(struct hash_table *table, key_type key, void *value)
-{
-      uint32_t pre_hash = table->hash(key);
-      uint32_t hash = compress(pre_hash, table->size);
-      struct linked_list *node = new_linked_list(key, so_regular(pre_hash), value);
-      struct linked_list *bucket = get_bucket(hash, table);
-      if (!bucket)
-            bucket = init_bucket(hash, table);
-      struct linked_list *result = linked_list_insert(table->hp, &bucket, node);
-      if (result != node)
-      {
-            free(node);
-            return false;
-      }
-      uint32_t csize = pow_2(table->size + 1) - 1;
-      uint32_t cbsize = table->size;
-      if ((fetch_and_inc(&table->nb_elements) / csize) > THRESHOLD)
-            atomic_compare_and_swap(&table->size, &cbsize, cbsize + 1);
-      return true;
-}
-
-void *hash_table_get(struct hash_table *table, key_type key)
-{
-      uint32_t pre_hash = table->hash(key);
-      uint32_t hash = compress(pre_hash, table->size);
-      struct linked_list *bucket = get_bucket(hash, table);
-      if (!bucket)
-            bucket = init_bucket(hash, table);
-      struct linked_list *result = linked_list_get(table->hp, &bucket, key, so_regular(pre_hash));
-      if (result)
-            return atomic_load_list(&result->data);
-      else
-            return NULL;
-}
-
-bool hash_table_remove(struct hash_table *table, key_type key)
-{
-      uint32_t pre_hash = table->hash(key);
-      uint32_t hash = compress(pre_hash, table->size);
-      struct linked_list *bucket = get_bucket(hash, table);
-      if (!bucket)
-            bucket = init_bucket(hash, table);
-      if (!linked_list_delete(table->hp, &bucket, key, so_regular(pre_hash)))
-            return false;
-      fetch_and_dec(&table->nb_elements);
-      return true;
-}
-
-void hash_table_free(struct hash_table **table)
-{
-      linked_list_free(*((*table)->index));
-
-      for (uint32_t i = 0; i < (*table)->size; ++i)
-      {
-            if ((*table)->index[i])
-                  free((*table)->index[i]);
-      }
-      free((*table)->index);
-      free(*table);
-}
-
-/*                     Private functions                      */
-
-/*                     Private functions                      */
 
 #endif
