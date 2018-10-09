@@ -13,6 +13,11 @@ template <typename K, typename H, typename D>
 class LinkedListLf
 {
 public:
+  std::atomic<LinkedListLf<K, H, D> *> next;
+  K key;
+  H hash;
+  D data;
+
   LinkedListLf<K, H, D> *insert(const D &data, const K &key)
   {
     return this->insert(data, key, key);
@@ -20,23 +25,30 @@ public:
 
   LinkedListLf<K, H, D> *insert(const D &data, const K &key, const H &hash)
   {
+    LinkedListLf<K, H, D> *item = new LinkedListLf<K, H, D>(this->hp, key, hash, data);
+    LinkedListLf<K, H, D> *result = this->insert(item);
+    if (item != result)
+      delete (item);
+    return result;
+  }
+
+  LinkedListLf<K, H, D> *insert(LinkedListLf<K, H, D> *item)
+  {
     this->hp->subscribe();
 
     // Private per thread variables
     LinkedListLf<K, H, D> *&cur = get_cur();
     LinkedListLf<K, H, D> *&prev = get_prev();
-
     LinkedListLf<K, H, D> *result = nullptr;
 
     for (;;)
     {
-      if (this->find(key, hash))
+      if (this->find(item->key, item->hash))
       {
         result = cur;
         break;
       }
 
-      LinkedListLf<K, H, D> *item = new LinkedListLf<K, H, D>(this->hp, key, hash, data);
       LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
       item->next = curcleared;
 
@@ -44,8 +56,10 @@ public:
                                              std::memory_order_acquire, std::memory_order_relaxed))
       {
         result = item;
+        item->hp = this->hp;
         break;
       }
+      delete (item);
     }
 
     this->hp->unsubscribe();
@@ -120,29 +134,26 @@ public:
     return result;
   }
 
-  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *hptr, const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
-  LinkedListLf<K, H, D>(const K &k, const H &h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
+  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *&hptr, const K k, const H h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
+  LinkedListLf<K, H, D>(const K k, const H h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
   ~LinkedListLf<K, H, D>(){};
 
-  std::atomic<LinkedListLf<K, H, D> *> next;
-  K key;
-  H hash;
-  D data;
-
 private:
-  static inline LinkedListLf<K, H, D> *&get_cur()
+  HazardPointer<LinkedListLf<K, H, D>> *hp;
+
+  static LinkedListLf<K, H, D> *&get_cur()
   {
     static thread_local LinkedListLf<K, H, D> *cur;
     return cur;
   }
 
-  static inline LinkedListLf<K, H, D> *&get_prev()
+  static LinkedListLf<K, H, D> *&get_prev()
   {
     static thread_local LinkedListLf<K, H, D> *prev;
     return prev;
   }
 
-  static inline LinkedListLf<K, H, D> *&get_next()
+  static LinkedListLf<K, H, D> *&get_next()
   {
     static thread_local LinkedListLf<K, H, D> *next;
     return next;
@@ -168,7 +179,7 @@ private:
       {
         if (!cur)
           return false;
-            
+
         next = cur->next.load(std::memory_order_relaxed);
         LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
         this->hp->store(NEXT, nextcleared);
@@ -218,8 +229,6 @@ private:
   {
     return (LinkedListLf<K, H, D> *)(((uintptr_t)this) & ~((uintptr_t)0x1));
   }
-
-  HazardPointer<LinkedListLf<K, H, D>> *hp;
 };
 
 #endif

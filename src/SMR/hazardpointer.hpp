@@ -95,13 +95,13 @@ public:
   ~HazardPointer(){};
 
 private:
-  static inline HazardPointerRecord *&get_myhp()
+  static HazardPointerRecord *&get_myhp()
   {
     static thread_local HazardPointerRecord *myhp;
     return myhp;
   }
 
-  inline unsigned int get_batch_size()
+  unsigned int get_batch_size()
   {
     return (this->nbhp.load(std::memory_order_relaxed) * this->nbpointers * 2) + this->nbhp.load(std::memory_order_relaxed);
   }
