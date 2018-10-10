@@ -136,6 +136,7 @@ public:
 
   LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *&hptr, const K k, const H h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(hptr){};
   LinkedListLf<K, H, D>(const K k, const H h, const D &d) : next(nullptr), key(k), hash(h), data(d), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
+  LinkedListLf<K, H, D>(const K k, const H h) : next(nullptr), key(k), hash(h), data(), hp(new HazardPointer<LinkedListLf<K, H, D>>(NB_HP)){};
   ~LinkedListLf<K, H, D>(){};
 
 private:

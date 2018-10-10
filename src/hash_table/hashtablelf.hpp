@@ -15,13 +15,15 @@
 #define R6(n) R4(n), R4(n + 2 * 4), R4(n + 1 * 4), R4(n + 3 * 4)
 #define THRESHOLD 0.75
 
+static constexpr unsigned char bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
+
 template <typename K, typename D>
 class HashTableLf
 {
     public:
       std::atomic<std::atomic<LinkedListLf<K, uint32_t, D> *> *> *index;
-      std::atomic<int> size;
-      std::atomic<int> nb_elements;
+      std::atomic<uint32_t> size;
+      std::atomic<uint32_t> nb_elements;
 
       bool insert(const K &key, const D &value)
       {
@@ -30,7 +32,7 @@ class HashTableLf
             LinkedListLf<K, uint32_t, D> *bucket = this->get_bucket(hash);
             if (!bucket)
                   bucket = this->init_bucket(hash);
-            LinkedListLf<K, uint32_t, D> *node = new LinkedListLf<K, uint32_t, D>(bucket->hp, key, so_regular(pre_hash), value);
+            LinkedListLf<K, uint32_t, D> *node = new LinkedListLf<K, uint32_t, D>(key, so_regular(pre_hash), value);
             LinkedListLf<K, uint32_t, D> *result = bucket->insert(node);
             if (node != result)
             {
@@ -39,24 +41,25 @@ class HashTableLf
             }
             uint32_t cbsize = this->size.load(std::memory_order_relaxed);
             uint32_t csize = pow_2(cbsize + 1) - 1;
+            uint32_t csizenext = csize + 1;
             if ((this->nb_elements++ / csize) > THRESHOLD)
-                  this->size.compare_exchange_strong(cbsize, cbsize + 1,
+                  this->size.compare_exchange_strong(cbsize, csizenext,
                                                      std::memory_order_acquire, std::memory_order_relaxed);
             return true;
       }
 
       D get(const K &key)
       {
+            D result_data;
             uint32_t pre_hash = murmurhash3(key);
             uint32_t hash = this->compress(pre_hash);
             LinkedListLf<K, uint32_t, D> *bucket = this->get_bucket(hash);
             if (!bucket)
-                  bucket = thi->init_bucket(hash);
+                  bucket = this->init_bucket(hash);
             LinkedListLf<K, uint32_t, D> *result = bucket->get(key, so_regular(pre_hash));
             if (result)
-                  return result->data;
-            else
-                  return NULL;
+                  result_data = result->data;
+            return result_data;
       }
 
       bool remove(const K &key)
@@ -68,19 +71,20 @@ class HashTableLf
                   bucket = this->init_bucket(hash);
             if (!bucket->remove(key, so_regular(pre_hash)))
                   return false;
-            table->nb_elements--;
+            this->nb_elements--;
             return true;
       }
 
-      HashTableLf<T>() : size(1), nb_elements(0), index(new std::atomic<std::atomic<LinkedListLf<K, uint32_t, D> *> *>[32])
+      HashTableLf<K, D>() : index(new std::atomic<std::atomic<LinkedListLf<K, uint32_t, D> *> *>[32])
       {
-            this->index[0] = new std::atomic<LinkedListLf<K, uint32_t, D> *>(new LinkedListLf<K, uint32_t, D>(0, 0, nullptr));
+            K frist_index = static_cast<K>(0x0);
+            this->index[0] = new std::atomic<LinkedListLf<K, uint32_t, D> *>(new LinkedListLf<K, uint32_t, D>(frist_index, 0));
+            this->size.store(1, std::memory_order_relaxed);
+            this->nb_elements.store(0, std::memory_order_relaxed);
       };
-      ~HashTableLf<T>(){};
+      ~HashTableLf<K, D>(){};
 
     private:
-      static const unsigned char bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
-
       static uint32_t pow_2(uint32_t e)
       {
             uint32_t m = 0x1;
@@ -146,12 +150,13 @@ class HashTableLf
             uint32_t segment_size = pow_2(segment_index);
             if (!this->index[segment_index])
             {
+                  std::atomic<LinkedListLf<K, uint32_t, D> *> *expected = nullptr;
                   std::atomic<LinkedListLf<K, uint32_t, D> *> *segment = new std::atomic<LinkedListLf<K, uint32_t, D> *>[segment_size];
-                  if (!table->index[segment_index].compare_exchange_strong(nullptr, segment,
-                                                                           std::memory_order_acquire, std::memory_order_relaxed)
-                        delete (segment);
+                  if (!this->index[segment_index].compare_exchange_strong(expected, segment,
+                                                                          std::memory_order_acquire, std::memory_order_relaxed))
+                        delete[](segment);
             }
-            table->index[segment_index][hash % segment_size].store(head, std::memory_order_relaxed);
+            this->index[segment_index][hash % segment_size].store(head, std::memory_order_relaxed);
       }
 
       LinkedListLf<K, uint32_t, D> *init_bucket(uint32_t hash)
@@ -161,7 +166,8 @@ class HashTableLf
             if (!bucket)
                   bucket = this->init_bucket(parent);
             uint32_t so_hash = so_dummy(hash);
-            LinkedListLf<K, uint32_t, D> *dummy = new LinkedListLf<K, uint32_t, D>(reinterpret_cast<K>(so_hash), so_hash, nullptr); /* /!\  */
+            D dummy_data;
+            LinkedListLf<K, uint32_t, D> *dummy = new LinkedListLf<K, uint32_t, D>(static_cast<K>(so_hash), so_hash); /* /!\  */
             LinkedListLf<K, uint32_t, D> *result = bucket->insert(dummy);
             if (result != dummy)
             {
@@ -171,6 +177,6 @@ class HashTableLf
             this->set_bucket(dummy, hash);
             return dummy;
       }
-}
+};
 
 #endif
