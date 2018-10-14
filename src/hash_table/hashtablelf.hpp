@@ -15,6 +15,7 @@
 #define R4(n) R2(n), R2(n + 2 * 16), R2(n + 1 * 16), R2(n + 3 * 16)
 #define R6(n) R4(n), R4(n + 2 * 4), R4(n + 1 * 4), R4(n + 3 * 4)
 #define THRESHOLD 0.75
+#define INDEX_SIZE 32
 
 static constexpr unsigned char bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
 
@@ -79,11 +80,14 @@ class HashTableLf
             return true;
       }
 
-      HashTableLf<K, D>() : index(new std::atomic<std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *> *>[32])
+      HashTableLf<K, D>()
       {
             auto frist_index = new std::vector<const unsigned char>(1, 0x0);
-            auto first_item = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(frist_index, 0);
-            this->index[0] = new std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *>(first_item);
+            auto first_list = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(frist_index, 0);
+
+            this->index = new std::atomic<std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *> *>[INDEX_SIZE];
+            this->index[0] = new std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *>(first_list);
+            
             this->size.store(1, std::memory_order_relaxed);
             this->nb_elements.store(0, std::memory_order_relaxed);
       };
@@ -180,7 +184,7 @@ class HashTableLf
             auto so_hash = so_dummy(hash);
             auto so_hash_byte = to_bytes(so_hash);
             auto dummy = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(so_hash_byte, so_hash);
-            LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *result = bucket->insert(dummy);
+            auto result = bucket->insert(dummy);
             if (result != dummy)
             {
                   delete (dummy);
