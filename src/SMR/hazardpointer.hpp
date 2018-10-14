@@ -23,7 +23,7 @@ public:
     // First try to reuse a retire HP record
     bool expected = false;
     HazardPointerRecord *&myhp = this->get_myhp();
-    for (HazardPointerRecord *i = this->head; i; i = i->next)
+    for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
     {
       if (i->active.load(std::memory_order_relaxed) ||
           !i->active.compare_exchange_strong(expected, true,

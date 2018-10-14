@@ -21,12 +21,11 @@ inline static uint32_t fmix32(uint32_t h)
    return h;
 }
 
-template <typename K>
-uint32_t murmurhash3(const K &key)
+uint32_t murmurhash3(const std::vector<const unsigned char> &key)
 {
-   const unsigned char *data = reinterpret_cast<const unsigned char *>(std::addressof(key));
-   const int nblocks = sizeof(K) / 4;
-   int len = sizeof(K);
+   const unsigned char *data = key.data();
+   const int nblocks = key.size() / 4;
+   int len = key.size();
 
    uint32_t h1 = 2166136261;
    const uint32_t c1 = 0xcc9e2d51;

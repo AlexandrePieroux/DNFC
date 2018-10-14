@@ -202,11 +202,6 @@ TEST(HashTableTest, ConcurrentUpdates)
 
 int main(int argc, char **argv)
 {
-  std::cout << std::boolalpha 
-            << "HashTableLf<int, int>* is trivially copyable ? " 
-            << std::is_trivially_copyable<HashTableLf<int, int>*>::value << " \n"
-            << "std::atomic<HashTableLf<int, int>*> is lock free? "
-            << std::atomic<HashTableLf<int, int>*>{}.is_lock_free() << "\n";
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
