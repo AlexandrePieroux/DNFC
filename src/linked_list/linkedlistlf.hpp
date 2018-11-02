@@ -56,6 +56,7 @@ public:
                                              std::memory_order_acquire, std::memory_order_relaxed))
       {
         result = item;
+        delete(item->hp);
         item->hp = this->hp;
         break;
       }

@@ -186,12 +186,9 @@ class HashTableLf
             auto dummy = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(so_hash_byte, so_hash);
             auto result = bucket->insert(dummy);
             if (result != dummy)
-            {
                   delete (dummy);
-                  dummy = result;
-            }
-            this->set_bucket(dummy, hash);
-            return dummy;
+            this->set_bucket(result, hash);
+            return result;
       }
 };
 
