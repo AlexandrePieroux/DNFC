@@ -11,8 +11,6 @@ Algorithm used in the project library.
    - Lock-free linked list          (https://www.cl.cam.ac.uk/research/srg/netos/papers/2001-caslists.pdf)
    - Concurent lock-free hash table (http://people.csail.mit.edu/shanir/publications/Split-Ordered_Lists.pdf)
    - Flow Table                     (lock-free hash table based algorithm for network flows classification)
-   - Concurent lockfree queue       (https://www.research.ibm.com/people/m/michael/podc-1996.pdf)
+   - Concurent lockfree queue       (https://www.research.ibm.com/people/m/michael/podc-1996.pdf)
    - Hypercuts packet classificator (http://cseweb.ucsd.edu/~susingh/papers/hyp-sigcomm03.pdf)
    - Thread pool with blocking queue for jobs
-
-===================================
