@@ -5,7 +5,7 @@ Dynamic Network Flow Classification
 
 This project aim to implement a fast dynamic flow classification algorithm in networks.
 
-Algorithm used in the project library.
+Algorithm used in the project:
    - Safe Memory Reclamation        (http://www.research.ibm.com/people/m/michael/podc-2002.pdf) 
    - Lock-free linked list          (https://www.cl.cam.ac.uk/research/srg/netos/papers/2001-caslists.pdf)
    - Concurent lock-free hash table (http://people.csail.mit.edu/shanir/publications/Split-Ordered_Lists.pdf)
