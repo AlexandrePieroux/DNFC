@@ -1,8 +1,6 @@
 #ifndef __MURMUR3H__
 #define __MURMUR3H__
 
-#define _XOPEN_SOURCE
-
 #include <cstdint>
 #include <cstddef>
 
@@ -21,7 +19,7 @@ inline static uint32_t fmix32(uint32_t h)
    return h;
 }
 
-uint32_t murmurhash3(const std::vector<const unsigned char> &key)
+uint32_t murmurhash3(const std::vector<unsigned char> &key)
 {
    const unsigned char *data = key.data();
    const int nblocks = key.size() / 4;

@@ -1,8 +1,6 @@
 #ifndef _HASH_TABLEH_
 #define _HASH_TABLEH_
 
-#define _XOPEN_SOURCE
-
 #include <cstdint>
 #include <cstddef>
 #include <iterator>
@@ -23,7 +21,7 @@ template <typename K, typename D>
 class HashTableLf
 {
     public:
-      std::atomic<std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *> *> *index;
+      std::atomic<std::atomic<LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *> *> *index;
       std::atomic<uint32_t> size;
       std::atomic<uint32_t> nb_elements;
 
@@ -35,7 +33,7 @@ class HashTableLf
             auto bucket = this->get_bucket(hash);
             if (!bucket)
                   bucket = this->init_bucket(hash);
-            auto node = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(key_byte, so_regular(pre_hash), value);
+            auto node = new LinkedListLf<std::vector<unsigned char> *, uint32_t, D>(key_byte, so_regular(pre_hash), value);
             auto result = bucket->insert(node);
             if (node != result)
             {
@@ -82,11 +80,11 @@ class HashTableLf
 
       HashTableLf<K, D>()
       {
-            auto frist_index = new std::vector<const unsigned char>(1, 0x0);
-            auto first_list = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(frist_index, 0);
+            auto frist_index = new std::vector<unsigned char>(1, 0x0);
+            auto first_list = new LinkedListLf<std::vector<unsigned char> *, uint32_t, D>(frist_index, 0);
 
-            this->index = new std::atomic<std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *> *>[INDEX_SIZE];
-            this->index[0] = new std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *>(first_list);
+            this->index = new std::atomic<std::atomic<LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *> *>[INDEX_SIZE];
+            this->index[0] = new std::atomic<LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *>(first_list);
             
             this->size.store(1, std::memory_order_relaxed);
             this->nb_elements.store(0, std::memory_order_relaxed);
@@ -138,11 +136,11 @@ class HashTableLf
             return 0;
       }
 
-      static std::vector<const unsigned char> *to_bytes(const K &object)
+      static std::vector<unsigned char> *to_bytes(const K &object)
       {
             const unsigned char *begin = reinterpret_cast<const unsigned char *>(std::addressof(object));
             const unsigned char *end = begin + sizeof(K);
-            return new std::vector<const unsigned char>(begin, end);
+            return new std::vector<unsigned char>(begin, end);
       }
 
       uint32_t compress(uint32_t v)
@@ -151,7 +149,7 @@ class HashTableLf
             return (v & m);
       }
 
-      LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *get_bucket(uint32_t hash)
+      LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *get_bucket(uint32_t hash)
       {
             uint32_t segment_index = get_segment_index(hash);
             uint32_t segment_size = pow_2(segment_index);
@@ -160,14 +158,14 @@ class HashTableLf
             return this->index[segment_index][hash % segment_size].load(std::memory_order_relaxed);
       }
 
-      void set_bucket(LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *head, uint32_t hash)
+      void set_bucket(LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *head, uint32_t hash)
       {
             uint32_t segment_index = get_segment_index(hash);
             uint32_t segment_size = pow_2(segment_index);
             if (!this->index[segment_index])
             {
-                  std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *> *expected = nullptr;
-                  auto segment = new std::atomic<LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *>[segment_size];
+                  std::atomic<LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *> *expected = nullptr;
+                  auto segment = new std::atomic<LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *>[segment_size];
                   if (!this->index[segment_index].compare_exchange_strong(expected, segment,
                                                                           std::memory_order_acquire, std::memory_order_relaxed))
                         delete[](segment);
@@ -175,7 +173,7 @@ class HashTableLf
             this->index[segment_index][hash % segment_size].store(head, std::memory_order_relaxed);
       }
 
-      LinkedListLf<std::vector<const unsigned char> *, uint32_t, D> *init_bucket(uint32_t hash)
+      LinkedListLf<std::vector<unsigned char> *, uint32_t, D> *init_bucket(uint32_t hash)
       {
             uint32_t parent = get_parent(hash);
             auto bucket = this->get_bucket(parent);
@@ -183,7 +181,7 @@ class HashTableLf
                   bucket = this->init_bucket(parent);
             auto so_hash = so_dummy(hash);
             auto so_hash_byte = to_bytes(so_hash);
-            auto dummy = new LinkedListLf<std::vector<const unsigned char> *, uint32_t, D>(so_hash_byte, so_hash);
+            auto dummy = new LinkedListLf<std::vector<unsigned char> *, uint32_t, D>(so_hash_byte, so_hash);
             auto result = bucket->insert(dummy);
             if (result != dummy)
                   delete (dummy);

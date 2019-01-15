@@ -1,10 +1,10 @@
-#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
-
-#include "gtest/gtest.h"
-#include "ThreadPool.h"
+#include <gtest/gtest.h>
+#include <boost/bind.hpp>
+#include <boost/asio.hpp>
 
 #include "../hashtablelf.hpp"
 
@@ -18,7 +18,7 @@ int nb_numbers;
 int nb_threads;
 
 HashTableLf<int, int> *table;
-ThreadPool pool(RANGE_THREADS);
+boost::asio::thread_pool pool(RANGE_THREADS);
 
 struct arguments_t
 {
@@ -115,7 +115,7 @@ int job_get(arguments_t *args)
   {
     item = table->get(args->start_index + i);
     if (args->active_comparison)
-        EXPECT_EQ(item, (*args->numbers)[i]);
+      EXPECT_EQ(item, (*args->numbers)[i]);
   }
   return 1;
 }
@@ -132,53 +132,40 @@ int job_remove(arguments_t *args)
   return 1;
 }
 
-TEST (HashTableTest, Insert)
+TEST(HashTableTest, Insert)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_insert, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+    pool.join();
   },
                   true);
 }
 
-TEST (HashTableTest, Get)
+TEST(HashTableTest, Get)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_insert, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+    pool.join();
 
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_get, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_get, args[i]));
+    pool.join();
   },
                   true);
 }
 
-TEST (HashTableTest, Remove)
+TEST(HashTableTest, Remove)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_insert, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+    pool.join();
 
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_remove, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_remove, args[i]));
+    pool.join();
   },
                   true);
 }
@@ -189,13 +176,11 @@ TEST(HashTableTest, ConcurrentUpdates)
     std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
     {
-      results.emplace_back(pool.enqueue(&job_insert, args[i]));
-      results.emplace_back(pool.enqueue(&job_get, args[i]));
-      results.emplace_back(pool.enqueue(&job_remove, args[i]));
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+      boost::asio::post(pool, boost::bind(job_get, args[i]));
+      boost::asio::post(pool, boost::bind(job_remove, args[i]));
     }
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+    pool.join();
   },
                   false);
 }

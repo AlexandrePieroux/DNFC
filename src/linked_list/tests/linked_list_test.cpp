@@ -1,10 +1,10 @@
-#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
-
-#include "gtest/gtest.h"
-#include "ThreadPool.h"
+#include <gtest/gtest.h>
+#include <boost/bind.hpp>
+#include <boost/asio.hpp>
 
 #include "../linkedlistlf.hpp"
 
@@ -18,7 +18,7 @@ int nb_numbers;
 int nb_threads;
 
 LinkedListLf<int, int, int> *table;
-ThreadPool pool(RANGE_THREADS);
+boost::asio::thread_pool pool(RANGE_THREADS);
 
 struct arguments_t
 {
@@ -143,12 +143,9 @@ int job_remove(arguments_t *args)
 TEST(LinkedListTest, Insert)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_insert, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+    pool.join();
   },
                   true);
 }
@@ -156,18 +153,13 @@ TEST(LinkedListTest, Insert)
 TEST(LinkedListTest, Get)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_insert, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+    pool.join();
 
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_get, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_get, args[i]));
+    pool.join();
   },
                   true);
 }
@@ -175,18 +167,13 @@ TEST(LinkedListTest, Get)
 TEST(LinkedListTest, Remove)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_insert, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+    pool.join();
 
     for (int i = 0; i < nb_threads; ++i)
-      results.emplace_back(pool.enqueue(job_remove, args[i]));
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+      boost::asio::post(pool, boost::bind(job_remove, args[i]));
+    pool.join();
   },
                   true);
 }
@@ -194,16 +181,13 @@ TEST(LinkedListTest, Remove)
 TEST(LinkedListTest, ConcurrentUpdates)
 {
   test_iterations([](arguments_t **args) {
-    std::vector<std::future<int>> results;
     for (int i = 0; i < nb_threads; ++i)
     {
-      results.emplace_back(pool.enqueue(&job_insert, args[i]));
-      results.emplace_back(pool.enqueue(&job_get, args[i]));
-      results.emplace_back(pool.enqueue(&job_remove, args[i]));
+      boost::asio::post(pool, boost::bind(job_insert, args[i]));
+      boost::asio::post(pool, boost::bind(job_get, args[i]));
+      boost::asio::post(pool, boost::bind(job_remove, args[i]));
     }
-    for (auto &&result : results)
-      result.get();
-    results.clear();
+    pool.join();
   },
                   false);
 }

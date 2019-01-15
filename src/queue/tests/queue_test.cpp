@@ -1,14 +1,15 @@
-#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 
 extern "C"
 {
 #include "../queue.h"
-#include "../../thread_pool/thread_pool.h"
 }
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
+#include <boost/bind.hpp>
+#include <boost/asio.hpp>
 
 #define NB_NUMBERS      500000
 #define NB_THREADS      16

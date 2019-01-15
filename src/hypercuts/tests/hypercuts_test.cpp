@@ -3,10 +3,10 @@
 #include <stdlib.h>
 
 extern "C" {
-#include "../hypercuts.h"
+  #include "../hypercuts.h"
 }
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 #define NB_RULES 2500
 #define NB_DIMENSIONS 5

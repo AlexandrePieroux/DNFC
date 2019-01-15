@@ -6,10 +6,11 @@ extern "C"
 {
 #include "../flow_table.h"
 #include "../../memory_management/memory_management.h"
-#include "../../thread_pool/thread_pool.h"
 }
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
+#include <boost/bind.hpp>
+#include <boost/asio.hpp>
 
 #define NB_NUMBERS      1000000
 #define NB_THREADS      64
