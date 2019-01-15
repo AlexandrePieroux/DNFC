@@ -1,0 +1,14 @@
+version: '2'
+
+services: 
+  dnfc:
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    image: dnfc:latest
+    ports:
+      - "2000:2000"
+      - "50010:50010"
+    volumes: 
+      - .:/home/develop/dnfc

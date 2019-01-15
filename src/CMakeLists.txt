@@ -1,4 +1,4 @@
-# Define library. Only source files here!
+# Define library
 project(dnfclib)
 
 # Recursively get all source files
@@ -30,6 +30,7 @@ list(REMOVE_DUPLICATES INCLUDE_DIR)
 
 # Scan for tests
 foreach(test ${TEST_SOURCES})
+
     # Get test name
     get_filename_component(TESTNAME ${test} NAME)
     string(REGEX MATCH "^(.*)\\.[^.]*$" dummy ${TESTNAME})
