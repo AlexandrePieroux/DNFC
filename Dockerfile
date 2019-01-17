@@ -1,12 +1,12 @@
 # This is a test docker image to be run with the docker-compose file provided
-FROM gcc:latest
+FROM ubuntu:bionic
 LABEL Name=dnfc-test Version=0.0.1
 
 RUN apt-get update
 RUN apt-get install -y software-properties-common
 RUN apt-get update
 
-RUN apt-get install cmake gdb gdbserver libgtest-dev \
+RUN apt-get install wget cmake gcc gdbserver libgtest-dev \
                     build-essential python-dev autotools-dev libicu-dev \
                     build-essential libbz2-dev libboost-all-dev -y
 RUN apt-get clean autoclean
