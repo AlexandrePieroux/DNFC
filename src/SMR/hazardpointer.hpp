@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <atomic>
+#include <boost/thread/tss.hpp>
 
 template <typename T>
 class HazardPointer
@@ -21,8 +22,8 @@ public:
   void subscribe()
   {
     // First try to reuse a retire HP record
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
     bool expected = false;
-    HazardPointerRecord *&myhp = this->get_myhp();
     for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
     {
       if (i->active.load(std::memory_order_relaxed) ||
@@ -31,7 +32,7 @@ public:
         continue;
 
       // Sucessfully locked one record to use
-      myhp = i;
+      myhp.reset(i);
       return;
     }
 
@@ -39,13 +40,13 @@ public:
     this->nbhp.fetch_add(this->nbpointers, std::memory_order_relaxed);
 
     // Allocate and push a new record
-    myhp = new HazardPointerRecord();
+    myhp.reset(new HazardPointerRecord());
     myhp->hp = new std::atomic<T *>[this->nbpointers];
     myhp->next = this->head.load(std::memory_order_relaxed);
     myhp->active.store(true, std::memory_order_relaxed);
 
     // Add the new record to the list
-    while (!this->head.compare_exchange_weak(myhp->next, myhp,
+    while (!this->head.compare_exchange_weak(myhp->next, myhp.get(),
                                              std::memory_order_release,
                                              std::memory_order_relaxed))
       ;
@@ -53,35 +54,36 @@ public:
 
   void unsubscribe()
   {
-    HazardPointerRecord *&myhp = this->get_myhp();
-    if (!myhp)
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
+    if (!myhp.get())
       return;
     // Clear hp
     for (int i = 0; i < this->nbpointers; i++)
       myhp->hp[i].store(nullptr, std::memory_order_relaxed);
     myhp->active.store(false, std::memory_order_relaxed);
+    myhp.release();
   }
 
   T *load(const int &index)
   {
-    HazardPointerRecord *&myhp = this->get_myhp();
-    if (!myhp || index >= this->nbpointers)
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
+    if (!myhp.get() || index >= this->nbpointers)
       return NULL;
     return myhp->hp[index].load(std::memory_order_relaxed);
   }
 
   void store(const int &index, T *value)
   {
-    HazardPointerRecord *&myhp = this->get_myhp();
-    if (!myhp || index >= this->nbpointers)
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
+    if (!myhp.get() || index >= this->nbpointers)
       return;
     myhp->hp[index].store(value, std::memory_order_relaxed);
   }
 
   void delete_node(T *node)
   {
-    HazardPointerRecord *&myhp = this->get_myhp();
-    if (!myhp)
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
+    if (!myhp.get())
       return;
     myhp->rlist.push_front(node);
     if (myhp->rlist.size() >= this->get_batch_size())
@@ -95,9 +97,13 @@ public:
   ~HazardPointer(){};
 
 private:
-  static HazardPointerRecord *&get_myhp()
+  std::atomic<HazardPointerRecord *> head;
+  std::atomic<int> nbhp;
+  int nbpointers;
+
+  static inline boost::thread_specific_ptr<HazardPointerRecord> &get_myhp()
   {
-    static thread_local HazardPointerRecord *myhp;
+    static boost::thread_specific_ptr<HazardPointerRecord> myhp;
     return myhp;
   }
 
@@ -109,7 +115,7 @@ private:
   void scan()
   {
     // Stage 1
-    HazardPointerRecord *myhp = this->get_myhp();
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
     std::vector<T *> plist;
     for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
     {
@@ -140,8 +146,8 @@ private:
 
   void help_scan()
   {
+    boost::thread_specific_ptr<HazardPointerRecord> &myhp = get_myhp();
     bool expected = false;
-    HazardPointerRecord *myhp = this->get_myhp();
     for (HazardPointerRecord *i = this->head.load(std::memory_order_relaxed); i; i = i->next)
     {
       // Trying to lock the next non-used hazard pointer record
@@ -164,10 +170,6 @@ private:
       i->active.store(false, std::memory_order_relaxed);
     }
   }
-
-  std::atomic<HazardPointerRecord *> head;
-  std::atomic<int> nbhp;
-  int nbpointers;
 };
 
 #endif
