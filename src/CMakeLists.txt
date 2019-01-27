@@ -40,6 +40,7 @@ foreach(test ${TEST_SOURCES})
     # Create test executable
     add_executable(${TESTNAME} ${test})
     target_include_directories(${TESTNAME} PRIVATE ${INCLUDE_DIR})
+    target_link_libraries(${TESTNAME} ${Boost_LIBRARIES})
     target_link_libraries(${TESTNAME} 
                           gtest gtest_main)
 
