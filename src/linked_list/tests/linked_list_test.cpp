@@ -14,11 +14,12 @@
 #define RANGE_THREADS 8
 #define NB_STEPS_THREADS 2
 
+using namespace LLLF;
+
 int nb_numbers;
 int nb_threads;
-
-LinkedListLf<int, int, int> *table;
 boost::asio::thread_pool pool(RANGE_THREADS);
+LinkedListLf<int, int> *table;
 
 struct arguments_t
 {
@@ -51,7 +52,7 @@ arguments_t **init(const bool &active_comparison)
   srand(time(NULL));
   std::vector<int> *numbers = get_random_numbers(nb_numbers);
   arguments_t **args = new arguments_t *[nb_threads];
-  table = new LinkedListLf<int, int, int>(0, 0, 0);
+  table = new LinkedListLf<int, int>;
 
   // We distribute the work per threads
   int divider = nb_numbers / nb_threads;
@@ -98,7 +99,7 @@ void test_iterations(F &&fun, bool const &comparison)
 
 int job_insert(arguments_t *args)
 {
-  LinkedListLf<int, int, int> *result;
+  LinkedListLf<int, int> *result;
   for (int i = 0; i < args->numbers->size(); ++i)
   {
     result = table->insert((*args->numbers)[i], args->start_index + i);
@@ -114,7 +115,7 @@ int job_insert(arguments_t *args)
 
 int job_get(arguments_t *args)
 {
-  LinkedListLf<int, int, int> *item;
+  LinkedListLf<int, int> *item;
   for (int i = 0; i < args->numbers->size(); ++i)
   {
     item = table->get(args->start_index + i);
@@ -195,10 +196,10 @@ TEST(LinkedListTest, ConcurrentUpdates)
 int main(int argc, char **argv)
 {
   std::cout << std::boolalpha 
-            << "LinkedListLf<int, int, int>* is trivially copyable ? " 
-            << std::is_trivially_copyable<LinkedListLf<int, int, int>*>::value << " \n"
-            << "std::atomic<LinkedListLf<int, int, int>*> is lock free? "
-            << std::atomic<LinkedListLf<int, int, int>*>{}.is_lock_free() << "\n";
+            << "LinkedListLf<int, int>* is trivially copyable ? " 
+            << std::is_trivially_copyable<LinkedListLf<int, int>*>::value << " \n"
+            << "std::atomic<LinkedListLf<int, int>*> is lock free? "
+            << std::atomic<LinkedListLf<int, int>*>{}.is_lock_free() << "\n";
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

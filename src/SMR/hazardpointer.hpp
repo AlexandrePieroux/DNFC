@@ -7,6 +7,8 @@
 #include <atomic>
 #include <boost/thread/tss.hpp>
 
+namespace SMR
+{
 template <typename T>
 class HazardPointer
 {
@@ -171,5 +173,6 @@ private:
     }
   }
 };
+} // namespace HP
 
 #endif

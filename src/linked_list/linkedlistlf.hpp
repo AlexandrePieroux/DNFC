@@ -1,9 +1,3 @@
-/*
-  Known issues:
-    * This is assumed that H (hash type) can be cast to K (key type).
-    * The find function order the list in inceasing order using the hash.
-*/
-
 #ifndef _LINKED_LISTH_
 #define _LINKED_LISTH_
 
@@ -18,42 +12,52 @@
     n.release();              \
   }
 
+#define SOFT_SET(p, n) \
+  {                    \
+    p.release();       \
+    p.reset(n);        \
+  }
+
 #define NB_HP 3
 #define PREV 0
 #define CUR 1
 #define NEXT 2
 
-template <typename K, typename H, typename D>
+using namespace SMR;
+
+namespace LLLF
+{
+template <typename K, typename D>
 class LinkedListLf
 {
 public:
-  std::atomic<LinkedListLf<K, H, D> *> next;
+  std::atomic<LinkedListLf<K, D> *> next;
   K key;
-  H hash;
+  K hash;
   D data;
 
-  LinkedListLf<K, H, D> *insert(const D &data, const K &key)
+  LinkedListLf<K, D> *insert(const D &data, const K &key)
   {
     return this->insert(data, key, key);
   }
 
-  LinkedListLf<K, H, D> *insert(const D &data, const K &key, const H &hash)
+  LinkedListLf<K, D> *insert(const D &data, const K &key, const K &hash)
   {
-    LinkedListLf<K, H, D> *item = new LinkedListLf<K, H, D>(this->hp, key, hash, data);
-    LinkedListLf<K, H, D> *result = this->insert(item);
+    LinkedListLf<K, D> *item = new LinkedListLf<K, D>(this->hp, key, hash, data);
+    LinkedListLf<K, D> *result = this->insert(item);
     if (item != result)
       delete (item);
     return result;
   }
 
-  LinkedListLf<K, H, D> *insert(LinkedListLf<K, H, D> *item)
+  LinkedListLf<K, D> *insert(LinkedListLf<K, D> *item)
   {
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &prev = get_prev();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &cur = get_cur();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &next = get_next();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &prev = get_prev();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &cur = get_cur();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &next = get_next();
     this->hp->subscribe();
 
-    LinkedListLf<K, H, D> *result = nullptr;
+    LinkedListLf<K, D> *result = nullptr;
     for (;;)
     {
       if (this->find(item->key, item->hash))
@@ -62,7 +66,7 @@ public:
         break;
       }
 
-      LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
+      LinkedListLf<K, D> *curcleared = cur->get_clear_pointer();
       item->next = curcleared;
 
       if (prev->next.compare_exchange_strong(curcleared, item,
@@ -79,19 +83,19 @@ public:
     return result;
   }
 
-  LinkedListLf<K, H, D> *get(const K &key)
+  LinkedListLf<K, D> *get(const K &key)
   {
     return this->get(key, key);
   }
 
-  LinkedListLf<K, H, D> *get(const K &key, const H &hash)
+  LinkedListLf<K, D> *get(const K &key, const K &hash)
   {
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &prev = get_prev();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &cur = get_cur();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &next = get_next();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &prev = get_prev();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &cur = get_cur();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &next = get_next();
     this->hp->subscribe();
 
-    LinkedListLf<K, H, D> *result = nullptr;
+    LinkedListLf<K, D> *result = nullptr;
 
     if (this->find(key, hash))
       result = cur.get();
@@ -106,11 +110,11 @@ public:
     return this->remove(key, key);
   }
 
-  bool remove(const K &key, const H &hash)
+  bool remove(const K &key, const K &hash)
   {
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &prev = get_prev();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &cur = get_cur();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &next = get_next();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &prev = get_prev();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &cur = get_cur();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &next = get_next();
     this->hp->subscribe();
 
     bool result;
@@ -123,14 +127,14 @@ public:
         break;
       }
 
-      LinkedListLf<K, H, D> *nextmarked = next->mark_pointer();
-      LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
+      LinkedListLf<K, D> *nextmarked = next->mark_pointer();
+      LinkedListLf<K, D> *nextcleared = next->get_clear_pointer();
 
       if (!cur->next.compare_exchange_strong(nextcleared, nextmarked,
                                              std::memory_order_acquire, std::memory_order_relaxed))
         continue;
 
-      LinkedListLf<K, H, D> *cur_tmp = cur.get();
+      LinkedListLf<K, D> *cur_tmp = cur.get();
       if (prev->next.compare_exchange_strong(cur_tmp, nextcleared,
                                              std::memory_order_acquire, std::memory_order_relaxed))
         this->hp->delete_node(cur.get());
@@ -146,44 +150,44 @@ public:
     return result;
   }
 
-  LinkedListLf<K, H, D>(HazardPointer<LinkedListLf<K, H, D>> *hptr = new HazardPointer<LinkedListLf<K, H, D>>(NB_HP), const K k = 0, const H h = 0, const D &d = 0) : key(k),
-                                                                                                                                                                      hash(h),
-                                                                                                                                                                      data(d),
-                                                                                                                                                                      hp(hptr),
-                                                                                                                                                                      next(nullptr){};
-  ~LinkedListLf<K, H, D>(){};
+  LinkedListLf<K, D>(HazardPointer<LinkedListLf<K, D>> *hptr = new HazardPointer<LinkedListLf<K, D>>(NB_HP), const K k = 0, const K h = 0, const D &d = 0) : key(k),
+                                                                                                                                                             hash(h),
+                                                                                                                                                             data(d),
+                                                                                                                                                             hp(hptr),
+                                                                                                                                                             next(nullptr){};
+  ~LinkedListLf<K, D>(){};
 
 private:
-  static inline boost::thread_specific_ptr<LinkedListLf<K, H, D>> &get_prev()
+  static inline boost::thread_specific_ptr<LinkedListLf<K, D>> &get_prev()
   {
-    static boost::thread_specific_ptr<LinkedListLf<K, H, D>> prev_ptr;
+    static boost::thread_specific_ptr<LinkedListLf<K, D>> prev_ptr;
     return prev_ptr;
   }
 
-  static inline boost::thread_specific_ptr<LinkedListLf<K, H, D>> &get_cur()
+  static inline boost::thread_specific_ptr<LinkedListLf<K, D>> &get_cur()
   {
-    static boost::thread_specific_ptr<LinkedListLf<K, H, D>> cur_ptr;
+    static boost::thread_specific_ptr<LinkedListLf<K, D>> cur_ptr;
     return cur_ptr;
   }
 
-  static inline boost::thread_specific_ptr<LinkedListLf<K, H, D>> &get_next()
+  static inline boost::thread_specific_ptr<LinkedListLf<K, D>> &get_next()
   {
-    static boost::thread_specific_ptr<LinkedListLf<K, H, D>> next_ptr;
+    static boost::thread_specific_ptr<LinkedListLf<K, D>> next_ptr;
     return next_ptr;
   }
 
-  HazardPointer<LinkedListLf<K, H, D>> *hp;
+  HazardPointer<LinkedListLf<K, D>> *hp;
 
-  bool find(const K &key, const H &hash)
+  bool find(const K &key, const K &hash)
   {
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &prev = get_prev();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &cur = get_cur();
-    boost::thread_specific_ptr<LinkedListLf<K, H, D>> &next = get_next();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &prev = get_prev();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &cur = get_cur();
+    boost::thread_specific_ptr<LinkedListLf<K, D>> &next = get_next();
 
     for (;;)
     {
-      prev.reset(this);
-      cur.reset(this->next.load(std::memory_order_relaxed));
+      SOFT_SET(prev, this)
+      SOFT_SET(cur, this->next.load(std::memory_order_relaxed))
       this->hp->store(CUR, cur->get_clear_pointer());
 
       if (prev->next.load(std::memory_order_relaxed) != cur->get_clear_pointer())
@@ -194,15 +198,15 @@ private:
         if (!cur.get())
           return false;
 
-        next.reset(cur->next.load(std::memory_order_relaxed));
-        LinkedListLf<K, H, D> *nextcleared = next->get_clear_pointer();
+        SOFT_SET(next, cur->next.load(std::memory_order_relaxed))
+        LinkedListLf<K, D> *nextcleared = next->get_clear_pointer();
         this->hp->store(NEXT, nextcleared);
 
         if (cur->next.load(std::memory_order_relaxed) != next.get())
           break;
 
         K ckey = cur->key;
-        H chash = cur->hash;
+        K chash = cur->hash;
 
         if (prev->next.load(std::memory_order_relaxed) != cur->get_clear_pointer())
           break;
@@ -211,27 +215,27 @@ private:
         {
           if (chash > hash || (key == ckey && chash == hash))
             return (key == ckey && chash == hash);
-          prev.reset(cur.get());
+          SOFT_SET(prev, cur.get())
           this->hp->store(PREV, cur.get());
         }
         else
         {
-          LinkedListLf<K, H, D> *curcleared = cur->get_clear_pointer();
+          LinkedListLf<K, D> *curcleared = cur->get_clear_pointer();
           if (prev->next.compare_exchange_strong(curcleared, nextcleared,
                                                  std::memory_order_acquire, std::memory_order_relaxed))
             this->hp->delete_node(cur.get());
           else
             break;
         }
-        cur.reset(nextcleared);
+        SOFT_SET(cur, nextcleared)
         this->hp->store(CUR, nextcleared);
       }
     }
   }
 
-  LinkedListLf<K, H, D> *mark_pointer()
+  LinkedListLf<K, D> *mark_pointer()
   {
-    return (LinkedListLf<K, H, D> *)(((uintptr_t)this) | 0x1);
+    return (LinkedListLf<K, D> *)(((uintptr_t)this) | 0x1);
   }
 
   uintptr_t get_mark()
@@ -239,10 +243,11 @@ private:
     return (uintptr_t)(this->next.load(std::memory_order_relaxed)) & 0x1;
   }
 
-  LinkedListLf<K, H, D> *get_clear_pointer()
+  LinkedListLf<K, D> *get_clear_pointer()
   {
-    return (LinkedListLf<K, H, D> *)(((uintptr_t)this) & ~((uintptr_t)0x1));
+    return (LinkedListLf<K, D> *)(((uintptr_t)this) & ~((uintptr_t)0x1));
   }
 };
+} // namespace LLLF
 
 #endif
