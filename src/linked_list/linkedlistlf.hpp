@@ -36,14 +36,14 @@ public:
   K hash;
   D data;
 
-  LinkedListLf<K, D> *insert(const D &data, const K &key)
+  LinkedListLf<K, D> *insert(const K &key, const D &data)
   {
-    return this->insert(data, key, key);
+    return this->insert(key, data, key);
   }
 
-  LinkedListLf<K, D> *insert(const D &data, const K &key, const K &hash)
+  LinkedListLf<K, D> *insert(const K &key, const D &data, const K &hash)
   {
-    LinkedListLf<K, D> *item = new LinkedListLf<K, D>(this->hp, key, hash, data);
+    LinkedListLf<K, D> *item = new LinkedListLf<K, D>(key, data, hash, this->hp);
     LinkedListLf<K, D> *result = this->insert(item);
     if (item != result)
       delete (item);
@@ -150,7 +150,7 @@ public:
     return result;
   }
 
-  LinkedListLf<K, D>(HazardPointer<LinkedListLf<K, D>> *hptr = new HazardPointer<LinkedListLf<K, D>>(NB_HP), const K k = 0, const K h = 0, const D &d = 0) : key(k),
+  LinkedListLf<K, D>(const K k = 0, const D &d = 0, const K h = 0, HazardPointer<LinkedListLf<K, D>> *hptr = new HazardPointer<LinkedListLf<K, D>>(NB_HP)) : key(k),
                                                                                                                                                              hash(h),
                                                                                                                                                              data(d),
                                                                                                                                                              hp(hptr),

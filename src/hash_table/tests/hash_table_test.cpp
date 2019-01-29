@@ -14,6 +14,8 @@
 #define RANGE_THREADS 8
 #define NB_STEPS_THREADS 2
 
+using namespace HTLF;
+
 int nb_numbers;
 int nb_threads;
 

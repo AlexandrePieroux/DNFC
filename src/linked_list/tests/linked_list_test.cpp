@@ -102,7 +102,7 @@ int job_insert(arguments_t *args)
   LinkedListLf<int, int> *result;
   for (int i = 0; i < args->numbers->size(); ++i)
   {
-    result = table->insert((*args->numbers)[i], args->start_index + i);
+    result = table->insert(args->start_index + i, (*args->numbers)[i]);
     if (args->active_comparison)
     {
       EXPECT_EQ(result->data, (*args->numbers)[i]);

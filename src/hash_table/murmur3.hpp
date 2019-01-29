@@ -1,8 +1,16 @@
+/*
+   WIP:
+      * Need to fix hash function to return std::vector<unsigned char>
+*/
+
 #ifndef __MURMUR3H__
 #define __MURMUR3H__
 
 #include <cstdint>
 #include <cstddef>
+
+namespace MURMUR3
+{
 
 inline static uint32_t rotl32(uint32_t x, const int8_t &r)
 {
@@ -19,7 +27,7 @@ inline static uint32_t fmix32(uint32_t h)
    return h;
 }
 
-uint32_t murmurhash3(const std::vector<unsigned char> &key)
+std::vector<unsigned char>* murmurhash3(const std::vector<unsigned char> &key)
 {
    const unsigned char *data = key.data();
    const int nblocks = key.size() / 4;
@@ -62,7 +70,13 @@ uint32_t murmurhash3(const std::vector<unsigned char> &key)
 
    h1 ^= len;
    h1 = fmix32(h1);
-   return h1;
+
+   // Not sure if this part is well optimized
+   std::vector<unsigned char>* charvec = new std::vector<unsigned char>(sizeof(h1));
+   std::memcpy(&h1, &charvec[0], sizeof(h1));
+   return charvec;
 }
+
+} // namespace MURMUR3
 
 #endif
