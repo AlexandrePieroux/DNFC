@@ -25,7 +25,7 @@ template <typename K, typename D>
 class HashTableLf
 {
     public:
-      std::atomic<std::atomic<LinkedListLf<std::size_t, D> *> *> *index;
+      std::atomic<std::atomic<LinkedListLf<K, D> *> *> *index;
       std::atomic<unsigned int> size;
       std::atomic<unsigned int> nb_elements;
       boost::hash<K> hash;
@@ -35,7 +35,7 @@ class HashTableLf
             std::size_t pre_hash = this->hash(key);
             std::size_t hash = this->compress(pre_hash);
             auto bucket = this->get_bucket(hash);
-            auto node = new LinkedListLf<std::size_t, D>(key, value, so_regular(pre_hash));
+            auto node = new LinkedListLf<K, D>(key, value, so_regular(pre_hash));
             auto result = bucket->insert(node);
             if (node != result)
             {
@@ -75,10 +75,10 @@ class HashTableLf
 
       HashTableLf<K, D>()
       {
-            auto first_list = new LinkedListLf<std::size_t, D>;
+            auto first_list = new LinkedListLf<K, D>;
 
-            this->index = new std::atomic<std::atomic<LinkedListLf<std::size_t, D> *> *>[INDEX_SIZE];
-            this->index[0] = new std::atomic<LinkedListLf<std::size_t, D> *>(first_list);
+            this->index = new std::atomic<std::atomic<LinkedListLf<K, D> *> *>[INDEX_SIZE];
+            this->index[0] = new std::atomic<LinkedListLf<K, D> *>(first_list);
 
             this->size.store(1, std::memory_order_relaxed);
             this->nb_elements.store(0, std::memory_order_relaxed);
@@ -136,7 +136,7 @@ class HashTableLf
             return (v & m);
       }
 
-      LinkedListLf<std::size_t, D> *get_bucket(std::size_t hash)
+      LinkedListLf<K, D> *get_bucket(std::size_t hash)
       {
             unsigned int segment_index = get_segment_index(hash);
             unsigned int segment_size = pow_2(segment_index);
@@ -145,14 +145,14 @@ class HashTableLf
             return this->index[segment_index][hash % segment_size].load(std::memory_order_relaxed);
       }
 
-      void set_bucket(LinkedListLf<std::size_t, D> *head, std::size_t hash)
+      void set_bucket(LinkedListLf<K, D> *head, std::size_t hash)
       {
             unsigned int segment_index = get_segment_index(hash);
             unsigned int segment_size = pow_2(segment_index);
             if (!this->index[segment_index])
             {
-                  std::atomic<LinkedListLf<std::size_t, D> *> *expected = nullptr;
-                  auto segment = new std::atomic<LinkedListLf<std::size_t, D> *>[segment_size];
+                  std::atomic<LinkedListLf<K, D> *> *expected = nullptr;
+                  auto segment = new std::atomic<LinkedListLf<K, D> *>[segment_size];
                   if (!this->index[segment_index].compare_exchange_strong(expected, segment,
                                                                           std::memory_order_acquire, std::memory_order_relaxed))
                         delete[](segment);
@@ -160,7 +160,7 @@ class HashTableLf
             this->index[segment_index][hash % segment_size].store(head, std::memory_order_relaxed);
       }
 
-      LinkedListLf<std::size_t, D> *init_bucket(std::size_t hash)
+      LinkedListLf<K, D> *init_bucket(std::size_t hash)
       {
             std::size_t parent = get_parent(hash);
             auto bucket = this->get_bucket(parent);
