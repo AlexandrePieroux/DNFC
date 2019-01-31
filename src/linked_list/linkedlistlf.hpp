@@ -38,10 +38,10 @@ public:
 
   LinkedListLf<K, D> *insert(const K &key, const D &data)
   {
-    return this->insert(key, data, key);
+    return this->insert(key, data, 0);
   }
 
-  LinkedListLf<K, D> *insert(const K &key, const D &data, const K &hash)
+  LinkedListLf<K, D> *insert(const K &key, const D &data, const std::size_t hash)
   {
     LinkedListLf<K, D> *item = new LinkedListLf<K, D>(key, data, hash, this->hp);
     LinkedListLf<K, D> *result = this->insert(item);
@@ -85,10 +85,10 @@ public:
 
   LinkedListLf<K, D> *get(const K &key)
   {
-    return this->get(key, key);
+    return this->get(key, 0);
   }
 
-  LinkedListLf<K, D> *get(const K &key, const K &hash)
+  LinkedListLf<K, D> *get(const K &key, const std::size_t hash)
   {
     boost::thread_specific_ptr<LinkedListLf<K, D>> &prev = get_prev();
     boost::thread_specific_ptr<LinkedListLf<K, D>> &cur = get_cur();
@@ -110,7 +110,7 @@ public:
     return this->remove(key, key);
   }
 
-  bool remove(const K &key, const K &hash)
+  bool remove(const K &key, const std::size_t hash)
   {
     boost::thread_specific_ptr<LinkedListLf<K, D>> &prev = get_prev();
     boost::thread_specific_ptr<LinkedListLf<K, D>> &cur = get_cur();
@@ -150,11 +150,15 @@ public:
     return result;
   }
 
-  LinkedListLf<K, D>(const K k = 0, const D &d = 0, const K h = 0, HazardPointer<LinkedListLf<K, D>> *hptr = new HazardPointer<LinkedListLf<K, D>>(NB_HP)) : key(k),
-                                                                                                                                                             hash(h),
-                                                                                                                                                             data(d),
-                                                                                                                                                             hp(hptr),
-                                                                                                                                                             next(nullptr){};
+  LinkedListLf<K, D>(
+      const K k = K{},
+      const D &d = D{},
+      const std::size_t h = 0,
+      HazardPointer<LinkedListLf<K, D>> *hptr = new HazardPointer<LinkedListLf<K, D>>(NB_HP)) : key(k),
+                                                                                                hash(h),
+                                                                                                data(d),
+                                                                                                hp(hptr),
+                                                                                                next(nullptr){};
   ~LinkedListLf<K, D>(){};
 
 private:

@@ -107,7 +107,6 @@ int job_insert(arguments_t *args)
     {
       EXPECT_EQ(result->data, (*args->numbers)[i]);
       EXPECT_EQ(result->key, args->start_index + i);
-      EXPECT_EQ(result->hash, args->start_index + i);
     }
   }
   return 1;
