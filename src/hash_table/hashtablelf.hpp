@@ -13,7 +13,6 @@
 #define R4(n) R2(n), R2(n + 2 * 16), R2(n + 1 * 16), R2(n + 3 * 16)
 #define R6(n) R4(n), R4(n + 2 * 4), R4(n + 1 * 4), R4(n + 3 * 4)
 #define LOAD_FACTOR  0.75
-#define INDEX_SIZE   32
 
 static constexpr unsigned char bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
 
@@ -59,7 +58,7 @@ class HashTableLf
             auto result = bucket->get(key, so_regular(pre_hash));
             if (result)
                   return result->data;
-            return 0;
+            return D{};
       }
 
       bool remove(const K &key)
@@ -75,9 +74,8 @@ class HashTableLf
 
       HashTableLf<K, D>()
       {
+            this->index = new std::atomic<std::atomic<LinkedListLf<K, D> *> *>[sizeof(std::size_t) * 4]();
             auto first_list = new LinkedListLf<K, D>;
-
-            this->index = new std::atomic<std::atomic<LinkedListLf<K, D> *> *>[INDEX_SIZE];
             this->index[0] = new std::atomic<LinkedListLf<K, D> *>(first_list);
 
             this->size.store(1, std::memory_order_relaxed);
@@ -142,7 +140,10 @@ class HashTableLf
             unsigned int segment_size = pow_2(segment_index);
             if (!this->index[segment_index])
                   return this->init_bucket(hash);
-            return this->index[segment_index][hash % segment_size].load(std::memory_order_relaxed);
+            auto result = this->index[segment_index][hash % segment_size].load(std::memory_order_relaxed);
+            if (!result)
+                  return this->init_bucket(hash);
+            return result;
       }
 
       void set_bucket(LinkedListLf<K, D> *head, std::size_t hash)
@@ -152,7 +153,7 @@ class HashTableLf
             if (!this->index[segment_index])
             {
                   std::atomic<LinkedListLf<K, D> *> *expected = nullptr;
-                  auto segment = new std::atomic<LinkedListLf<K, D> *>[segment_size];
+                  auto segment = new std::atomic<LinkedListLf<K, D> *>[segment_size]();
                   if (!this->index[segment_index].compare_exchange_strong(expected, segment,
                                                                           std::memory_order_acquire, std::memory_order_relaxed))
                         delete[](segment);
@@ -164,10 +165,8 @@ class HashTableLf
       {
             std::size_t parent = get_parent(hash);
             auto bucket = this->get_bucket(parent);
-            if (!bucket)
-                  bucket = this->init_bucket(parent);
             std::size_t so_hash = so_dummy(hash);
-            auto result = bucket->insert(so_hash, 0);
+            auto result = bucket->insert(so_hash, 0, so_hash);
             this->set_bucket(result, hash);
             return result;
       }
