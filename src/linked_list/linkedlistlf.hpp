@@ -23,9 +23,7 @@
 #define CUR 1
 #define NEXT 2
 
-using namespace SMR;
-
-namespace LLLF
+namespace DNFC
 {
 template <typename K, typename D>
 class LinkedListLf

@@ -17,9 +17,7 @@
 
 static constexpr unsigned char bits_table[256] = {R6(0), R6(2), R6(1), R6(3)};
 
-using namespace LLLF;
-
-namespace HTLF
+namespace DNFC
 {
 template <typename K, typename D>
 class HashTableLf
