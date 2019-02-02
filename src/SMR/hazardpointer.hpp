@@ -7,20 +7,12 @@
 #include <atomic>
 #include <boost/thread/tss.hpp>
 
-namespace SMR
+namespace DNFC
 {
 template <typename T>
 class HazardPointer
 {
 public:
-  struct HazardPointerRecord
-  {
-    std::atomic<T *> *hp;
-    std::list<T *> rlist;
-    std::atomic<bool> active;
-    HazardPointerRecord *next;
-  };
-
   void subscribe()
   {
     // First try to reuse a retire HP record
@@ -99,6 +91,14 @@ public:
   ~HazardPointer(){};
 
 private:
+  struct HazardPointerRecord
+  {
+    std::atomic<T *> *hp;
+    std::list<T *> rlist;
+    std::atomic<bool> active;
+    HazardPointerRecord *next;
+  };
+
   std::atomic<HazardPointerRecord *> head;
   std::atomic<int> nbhp;
   int nbpointers;
@@ -173,6 +173,6 @@ private:
     }
   }
 };
-} // namespace HP
+} // namespace DNFC
 
 #endif
