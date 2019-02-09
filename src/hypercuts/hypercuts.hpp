@@ -19,7 +19,7 @@ class Hypercuts<typename T>
   public:
     T search(std::string *header, std::size_t header_length)
     {
-        unsigned int header_values[classifier->nb_dimensions];
+        unsigned int header_values[this->nb_dimensions];
         struct classifier_field **fields = classifier->fields_set;
         for (unsigned int i = 0; i < classifier->nb_dimensions; ++i)
         {
@@ -46,7 +46,6 @@ class Hypercuts<typename T>
             return NULL;
 
         // Create and init the classifier
-        struct hypercuts_classifier *classifier = chkmalloc(sizeof(*classifier));
         struct hypercuts_node ***leaves = chkcalloc(1, sizeof(struct hypercuts_node ***));
         struct hypercuts_dimension **dimensions;
         struct classifier_field **fields_set;
@@ -78,23 +77,23 @@ class Hypercuts<typename T>
     ~Hypercuts<T>(){};
 
   private:
-    struct hypercuts_node
+    struct Node
     {
-        struct hypercuts_dimension **dimensions;
-        struct hypercuts_node **children;
-        struct classifier_rule **rules;
+        std::vector<Dimension> *dimensions;
+        std::vector<Node> *children;
+        std::vector<ClassifierRule> *rules;
     };
 
-    struct hypercuts_dimension
+    struct Dimension
     {
         unsigned int id;
         unsigned int cuts;
-        unsigned int min_dim;
-        unsigned int max_dim;
+        unsigned int min;
+        unsigned int max;
     };
 
-    hypercuts_node *root;
-    classifier_field **fields_set;
+    Node* root;
+    std::vector<Field>* fields_set;
     unsigned int nb_dimensions;
 
     void normalize_rules(
