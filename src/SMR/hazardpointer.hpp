@@ -1,11 +1,12 @@
 #ifndef _SMRH_
 #define _SMRH_
 
-#include <list>
 #include <vector>
-#include <algorithm>
+#include <list>
 #include <atomic>
-#include <boost/thread/tss.hpp>
+#include <algorithm>
+#include <memory>
+#include <cassert>
 
 namespace DNFC
 {
@@ -27,31 +28,31 @@ public:
    */
   std::atomic<data_pointer> &operator[](std::size_t index)
   {
-    HazardPointerRecord &myhp = getMyhp();
-    assert(myhp == nullptr && index >= myhp->hp.size());
+    std::unique_ptr<HazardPointerRecord> &myhp = getMyhp();
+    assert(myhp.get() != nullptr || index >= NbPtr);
     return myhp->hp[index];
   }
 
   /**
-   * Safely delete a node.
-   * @param node  
-   */
+     * Safely delete a node.
+     * @param node  
+     */
   template <typename T>
-  void deleteNode(T &&node)
+  void retire(T &&node)
   {
-    HazardPointerRecord &myhp = getMyhp();
+    std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<NbPtr>::getMyhp();
     if (!myhp.get())
       return;
-    myhp->rlist.push_front(std::forward(node));
-    if (myhp->rlist.size() >= getBatchSize())
+    myhp->rlist.push_front(node);
+    if (myhp->rlist.size() >= HazardPointerManager<NbPtr>::get().getBatchSize())
     {
-      scan();
-      help_scan();
+      HazardPointerManager<NbPtr>::get().scan();
+      HazardPointerManager<NbPtr>::get().help_scan();
     }
   }
 
   /**
-   * Subscribe and get a HazarPointerRecord set with the right amount of pointers.
+   * Subscribe and get a HazardPointerRecord set with the right amount of pointers.
    */
   HazardPointer()
   {
@@ -68,26 +69,16 @@ public:
 
 private:
   /**
-   * Thread local storage hazard pointer
-   */
-  HazardPointerRecord *getMyhp()
-  {
-    thread_local HazardPointerRecord *myhp;
-    return myhp;
-  }
-
-  /**
    * HazardPointerRecord
    * 
    * An object that hold informations about allocated hazard pointers in a Hazard pointer manager. 
    */
-  class HazardPointerRecord
+  struct HazardPointerRecord
   {
-  public:
     std::atomic<data_pointer> hp[NbPtr];
     std::list<data_pointer> rlist;
     std::atomic<bool> active;
-    HazardPointerRecord *next;
+    std::unique_ptr<HazardPointerRecord> next;
 
     HazardPointerRecord &operator=(HazardPointerRecord &&other) = delete;
     HazardPointerRecord &operator=(const HazardPointerRecord &) = delete;
@@ -96,17 +87,16 @@ private:
     {
       this->active.store(active, std::memory_order_relaxed);
     }
-    ~HazardPointerRecord(){};
-
-  private:
-    void resetHp()
-    {
-      if (nbHp > hpSize)
-      {
-        // TODO
-      }
-    }
   };
+
+  /**
+   * Thread local storage hazard pointer
+   */
+  static std::unique_ptr<HazardPointerRecord> &getMyhp()
+  {
+    thread_local std::unique_ptr<HazardPointerRecord> myhp;
+    return myhp;
+  }
 
   /**
    * HazardPointerManager
@@ -121,7 +111,7 @@ private:
   template <std::size_t nbPtr>
   class HazardPointerManager
   {
-  private:
+  public:
     static HazardPointerManager &get()
     {
       static HazardPointerManager m;
@@ -135,8 +125,11 @@ private:
     // Does not allow to copy construct or move construct the manager
     HazardPointerManager(const HazardPointerManager &) = delete;
     HazardPointerManager(HazardPointerManager &&) = delete;
-    HazardPointerManager() : nbhp(0){};
-    ~HazardPointerManager(){};
+    HazardPointerManager(){};
+    ~HazardPointerManager()
+    {
+      delete head.load();
+    }
 
     std::atomic<HazardPointerRecord *> head;
     std::atomic<int> nbhp;
@@ -145,12 +138,12 @@ private:
      * Subscribe a thread to the manager. During the time the thread is subscribed, it is
      * given a HazardPointerRecord object that allow it to protect 'nbPtr' number of pointers.
      */
-    static void subscribe()
+    void subscribe()
     {
       // First try to reuse a retire HP record
-      HazardPointerRecord &myhp = getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
       bool expected = false;
-      for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next)
+      for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i != nullptr; i = i->next.get())
       {
         if (i->active.load(std::memory_order_relaxed) ||
             !i->active.compare_exchange_strong(expected, true,
@@ -163,40 +156,39 @@ private:
       }
 
       // No HP records available for reuse so we add new ones
-      nbhp.fetch_add(nbPointers, std::memory_order_relaxed);
+      nbhp.fetch_add(nbPtr, std::memory_order_relaxed);
 
       // Allocate and push a new record
-      myhp.reset(new HazardPointerRecord(
-          nbPtr,
-          head.load(std::memory_order_relaxed),
-          true));
+      myhp.reset(new HazardPointerRecord(head.load(std::memory_order_relaxed),
+                                         true));
 
       // Add the new record to the list
-      while (!head.compare_exchange_weak(myhp->next, myhp.get(),
+      HazardPointerRecord *nextPtrVal = myhp->next.get();
+      while (!head.compare_exchange_weak(nextPtrVal, myhp.get(),
                                          std::memory_order_release,
                                          std::memory_order_relaxed))
         ;
     }
 
     /**
-     * Unsubscribe the current thread from the manager. Its HazarPointerRecord is put back into the store
+     * Unsubscribe the current thread from the manager. Its HazardPointerRecord is put back into the store
      * for reuse.
      */
     static void unsubscribe()
     {
-      HazardPointerRecord &myhp = getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
       if (!myhp.get())
         return;
       // Clear hp
-      for (int i = 0; i < nbPointers; i++)
-        myhp->hp[i].store(nullptr, atomics::memory_order_release);
+      for (int i = 0; i < nbPtr; i++)
+        myhp->hp[i].store(nullptr, std::memory_order_release);
       myhp->active.store(false, std::memory_order_relaxed);
       myhp.release();
     }
 
     unsigned int getBatchSize()
     {
-      return (nbhp.load(std::memory_order_relaxed) * nbPointers * 2) + nbhp.load(std::memory_order_relaxed);
+      return (nbhp.load(std::memory_order_relaxed) * nbPtr * 2) + nbhp.load(std::memory_order_relaxed);
     }
 
     /**
@@ -205,14 +197,14 @@ private:
     void scan()
     {
       // Stage 1
-      HazardPointerRecord &myhp = getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
       std::vector<data_pointer> plist;
-      for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next)
+      for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next.get())
       {
-        for (int j = 0; j < nbPointers; j++)
+        for (int j = 0; j < nbPtr; j++)
         {
-          T hp = i->hp[j].load(std::memory_order_relaxed);
-          if (hp.get())
+          data_pointer hp = i->hp[j].load(std::memory_order_relaxed);
+          if (hp != nullptr)
             plist.push_back(hp);
         }
       }
@@ -230,15 +222,16 @@ private:
         if (std::binary_search(plist.begin(), plist.end(), e))
           myhp->rlist.push_front(e);
         else
-          delete e;
+          //delete e; // TODO
+          return;
       }
     }
 
     void help_scan()
     {
-      HazardPointerRecord &myhp = getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
       bool expected = false;
-      for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next)
+      for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next.get())
       {
         // Trying to lock the next non-used hazard pointer record
         if (i->active.load(std::memory_order_relaxed) ||
