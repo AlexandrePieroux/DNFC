@@ -35,6 +35,9 @@ class MemoryPool
         freeList = currentItem;
     }
 
+    MemoryPool(size_t arena_size) : arenaSize(arena_size),
+                                    currentArena(new arena(arena_size)),
+                                    freeList(currentArena->load()) {}
   private:
     union chunk {
       public:
@@ -59,17 +62,13 @@ class MemoryPool
         }
 
       private:
-        using Type = alignas(alignof(T)) char[sizeof(T)];
-        Type data;
+        alignas(alignof(T)) char data[sizeof(T)];
         chunk *next;
     }; // chunk
 
     struct arena
     {
-      private:
-        std::unique_ptr<chunk[]> storage;
-        std::unique_ptr<arena> next;
-
+      public:
         arena(std::size_t size) : storage(new chunk[size])
         {
             for (std::size_t i = 1; i < size; i++)
@@ -87,6 +86,10 @@ class MemoryPool
             assert(!next);
             next.reset(n.release());
         }
+
+      private:
+        std::unique_ptr<chunk[]> storage;
+        std::unique_ptr<arena> next;
     }; // arena
 
     std::size_t arenaSize;
