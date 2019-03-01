@@ -11,14 +11,11 @@
 namespace DNFC
 {
 
-// Verbose typedef
-typedef void *data_pointer;
-
 /**
  * HazardPointer
  * 
  */
-template <std::size_t NbPtr>
+template <class T, std::size_t NbPtr>
 class HazardPointer
 {
 public:
@@ -26,7 +23,7 @@ public:
    * Access a HazardPointer through the HazardPointerRecord assigned
    * @param index  
    */
-  std::atomic<data_pointer> &operator[](std::size_t index)
+  std::atomic<T> &operator[](std::size_t index)
   {
     std::unique_ptr<HazardPointerRecord> &myhp = getMyhp();
     assert(myhp.get() != nullptr || index >= NbPtr);
@@ -37,10 +34,9 @@ public:
      * Safely delete a node.
      * @param node  
      */
-  template <typename T>
-  void retire(T &&node)
+  void retire(T &node)
   {
-    std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<NbPtr>::getMyhp();
+    std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, NbPtr>::getMyhp();
     if (!myhp.get())
       return;
     myhp->rlist.push_front(node);
@@ -75,8 +71,8 @@ private:
    */
   struct HazardPointerRecord
   {
-    std::atomic<data_pointer> hp[NbPtr];
-    std::list<data_pointer> rlist;
+    std::atomic<T> hp[NbPtr];
+    std::list<T> rlist;
     std::atomic<bool> active;
     std::unique_ptr<HazardPointerRecord> next;
 
@@ -141,7 +137,7 @@ private:
     void subscribe()
     {
       // First try to reuse a retire HP record
-      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, nbPtr>::getMyhp();
       bool expected = false;
       for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i != nullptr; i = i->next.get())
       {
@@ -176,7 +172,7 @@ private:
      */
     static void unsubscribe()
     {
-      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, nbPtr>::getMyhp();
       if (!myhp.get())
         return;
       // Clear hp
@@ -197,13 +193,13 @@ private:
     void scan()
     {
       // Stage 1
-      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
-      std::vector<data_pointer> plist;
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, nbPtr>::getMyhp();
+      std::vector<T> plist;
       for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next.get())
       {
         for (int j = 0; j < nbPtr; j++)
         {
-          data_pointer hp = i->hp[j].load(std::memory_order_relaxed);
+          T hp = i->hp[j].load(std::memory_order_relaxed);
           if (hp != nullptr)
             plist.push_back(hp);
         }
@@ -213,7 +209,7 @@ private:
 
       // Stage 2
       std::sort(plist.begin(), plist.end());
-      std::list<data_pointer> localRList = myhp->rlist;
+      std::list<T> localRList = myhp->rlist;
       myhp->rlist.clear();
 
       // Stage 3
@@ -222,14 +218,14 @@ private:
         if (std::binary_search(plist.begin(), plist.end(), e))
           myhp->rlist.push_front(e);
         else
-          //delete e; // TODO
-          return;
+          delete e; // TODO
+        return;
       }
     }
 
     void help_scan()
     {
-      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<nbPtr>::getMyhp();
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, nbPtr>::getMyhp();
       bool expected = false;
       for (HazardPointerRecord *i = head.load(std::memory_order_relaxed); i; i = i->next.get())
       {
