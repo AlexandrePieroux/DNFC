@@ -1,100 +1,79 @@
 #ifndef _MEMORYPOOLH_
 #define _MEMORYPOOLH_
 
+#include <memory>
+#include <new>
+
 namespace DNFC
 {
-template <typename T>
-class MemoryPool
+template <typename T, std::size_t max>
+struct pool
 {
   public:
-    template <typename... Args>
-    T *alloc(Args &&... args)
+    pool(pool const &) = delete;
+    pool &operator=(pool const &) = delete;
+
+    pool()
     {
-        if (freeList == nullptr)
-        {
-            std::unique_ptr<arena> newArena(new arena(arenaSize));
-            newArena->setNext(std::move(currentArena));
-            currentArena.reset(newArena.release());
-            freeList = currentArena->load();
-        }
-
-        chunk *currentItem = freeList;
-        freeList = currentItem->getNext();
-        T *result = currentItem->load();
-
-        new (result) T(std::forward<Args>(args)...);
-
-        return result;
+        allocBlock();
     }
 
-    void free(T *t)
+    pool(pool &&o) noexcept
     {
-        t->T::~T();
-        chunk *currentItem = chunk::storageToItem(t);
-        currentItem->setNext(freeList);
-        freeList = currentItem;
+        swap(o);
     }
 
-    MemoryPool(size_t arena_size) : arenaSize(arena_size),
-                                    currentArena(new arena(arena_size)),
-                                    freeList(currentArena->load()) {}
+    pool &operator=(pool &&o) noexcept
+    {
+        swap(o);
+        return *this;
+    }
+
+    void swap(pool &other) noexcept
+    {
+        std::swap(head, other.m_head);
+        std::swap(max, other.max);
+    }
+
+    T *alloc()
+    {
+        if (head == nullptr)
+            allocBlock();
+
+        node *result = head;
+        head = result->next;
+
+        return reinterpret_cast<T *>(result);
+    }
+
+    void free(T *ptr)
+    {
+        ptr->T::~T();
+        node *newPtr = reinterpret_cast<node *>(ptr);
+        newPtr->next = head;
+        head = newPtr;
+    }
+
   private:
-    union chunk {
-      public:
-        chunk *getNext() const
-        {
-            return next;
-        }
-
-        void setNext(chunk *n)
-        {
-            next = n;
-        }
-
-        T *load()
-        {
-            return reinterpret_cast<T *>(data);
-        }
-
-        static chunk *storageToItem(T *t)
-        {
-            return reinterpret_cast<chunk *>(t);
-        }
-
-      private:
+    union node {
         alignas(alignof(T)) char data[sizeof(T)];
-        chunk *next;
-    }; // chunk
+        node *next;
+    };
 
-    struct arena
+    node *head = nullptr;
+
+    void allocBlock()
     {
-      public:
-        arena(std::size_t size) : storage(new chunk[size])
-        {
-            for (std::size_t i = 1; i < size; i++)
-                storage[i - 1].setNext(&storage[i]);
-            storage[size - 1].setNext(nullptr);
-        }
+        uint64_t allocSize = sizeof(T) * max;
+        head = reinterpret_cast<node *>(std::malloc(allocSize));
+        if (head == nullptr)
+            throw std::bad_alloc();
 
-        chunk *load() const
-        {
-            return storage.get();
-        }
+        for (int i = 1; i < allocSize; i++)
+            head[i - 1].next = &head[i];
 
-        void setNext(std::unique_ptr<arena> &&n)
-        {
-            assert(!next);
-            next.reset(n.release());
-        }
-
-      private:
-        std::unique_ptr<chunk[]> storage;
-        std::unique_ptr<arena> next;
-    }; // arena
-
-    std::size_t arenaSize;
-    std::unique_ptr<arena> currentArena;
-    chunk *freeList;
+        head[allocSize - 1].next = nullptr;
+    }
 };
 } // namespace DNFC
 
