@@ -17,20 +17,20 @@ class TestPolicy : DNFC::DefaultHazardPointerPolicy
     const static int BlockSize = 2;
 };
 
-TEST(LinkedListTest, Declaration)
+TEST(HazardPointer, Declaration)
 {
     DNFC::HazardPointer<int, TestPolicy> pointer;
     EXPECT_EQ(pointer.get(), nullptr);
 }
 
-TEST(LinkedListTest, Get)
+TEST(HazardPointer, Get)
 {
     int *val = new int(1);
     DNFC::HazardPointer<int, TestPolicy> pointer(val);
     EXPECT_EQ(pointer.get(), val);
 }
 
-TEST(LinkedListTest, SetPointerByCopy)
+TEST(HazardPointer, SetPointerByCopy)
 {
     int *val = new int(1);
     DNFC::HazardPointer<int, TestPolicy> pointer;
@@ -38,7 +38,7 @@ TEST(LinkedListTest, SetPointerByCopy)
     EXPECT_EQ(pointer.get(), val);
 }
 
-TEST(LinkedListTest, SetPointerByMoving)
+TEST(HazardPointer, SetPointerByMoving)
 {
     int *val = new int(1);
     DNFC::HazardPointer<int, TestPolicy> pointer;
@@ -46,7 +46,7 @@ TEST(LinkedListTest, SetPointerByMoving)
     EXPECT_EQ(pointer.get(), val);
 }
 
-TEST(LinkedListTest, Release)
+TEST(HazardPointer, Release)
 {
     int *val = new int(1);
     DNFC::HazardPointer<int, TestPolicy> pointer(val);
@@ -55,7 +55,7 @@ TEST(LinkedListTest, Release)
     EXPECT_EQ(*val, 1);
 }
 
-TEST(LinkedListTest, Retire)
+TEST(HazardPointer, Retire)
 {
     int *val = new int(1);
     DNFC::HazardPointer<int, TestPolicy> pointer(val);
@@ -63,7 +63,7 @@ TEST(LinkedListTest, Retire)
     EXPECT_EQ(pointer.get(), nullptr);
 }
 
-TEST(LinkedListTest, SetPointerWithAnotherHazardPointer)
+TEST(HazardPointer, SetPointerWithAnotherHazardPointer)
 {
     int *val = new int(1);
     DNFC::HazardPointer<int, TestPolicy> pointer;
@@ -72,7 +72,7 @@ TEST(LinkedListTest, SetPointerWithAnotherHazardPointer)
     EXPECT_EQ(pointer.get(), val);
 }
 
-TEST(LinkedListTest, TriggerNewMemoryBlockCreation)
+TEST(HazardPointer, TriggerNewMemoryBlockCreation)
 {
     int *valOne = new int(1);
     int *valTwo = new int(2);
@@ -96,7 +96,7 @@ TEST(LinkedListTest, TriggerNewMemoryBlockCreation)
     EXPECT_EQ(six.get(), valSix);
 }
 
-TEST(LinkedListTest, PreventDeletionOfGuardedPointerWhileScanning)
+TEST(HazardPointer, PreventDeletionOfGuardedPointerWhileScanning)
 {
     int *valOne = new int(1);
 
