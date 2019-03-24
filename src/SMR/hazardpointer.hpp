@@ -220,7 +220,7 @@ private:
    */
   struct HazardPointerRecord
   {
-    GuardedPointer *rlistHead;
+    GuardedPointer *rlistHead = nullptr;
     int nbRetiredPtrs;
 
     std::atomic<bool> active;
@@ -280,7 +280,7 @@ private:
 
   private:
     std::atomic<GuardedPointerBlock *> blockHead;
-    GuardedPointer *flistHead;
+    GuardedPointer *flistHead = nullptr;
 
     // Manage pointers memory allocation
     GuardedPointer *allocPtr()
