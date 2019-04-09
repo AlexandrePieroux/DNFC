@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
@@ -6,20 +7,80 @@
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 
-#include "../hashtablelf.hpp"
+#include "../hashtable.hpp"
 
+using namespace DNFC;
+
+/**
+ * Standard tests part
+ */
+class TestHashTablePolicy : public DefaultHashTablePolicy
+{
+    public:
+    const static std::size_t BlockSize = 2;
+};
+
+TEST(HashTableTest, InsertReturnTrue)
+{
+    HashTable<int, int, TestHashTablePolicy> hm;
+    int valOne = 1;
+    EXPECT_TRUE(hm.insert(50, valOne));
+}
+
+TEST(HashTableTest, GetWhatWeStored)
+{
+    HashTable<int, int, TestHashTablePolicy> hm;
+    int valOne = 1;
+
+    hm.insert(50, valOne);
+    EXPECT_EQ(hm.get(50), valOne);
+}
+
+TEST(HashTableTest, GetNonInsertedItem)
+{
+    HashTable<int, int, TestHashTablePolicy> hm;
+    EXPECT_EQ(hm.get(50), int{});
+}
+
+TEST(HashTableTest, RemoveWhatIsInserted)
+{
+    HashTable<int, int, TestHashTablePolicy> hm;
+    int valOne = 1;
+
+    hm.insert(50, valOne);
+    EXPECT_TRUE(hm.remove(50));
+    EXPECT_EQ(hm.get(50), int{});
+}
+
+TEST(HashTableTest, RemoveNonInsertedItem)
+{
+    HashTable<int, int, TestHashTablePolicy> hm;
+    EXPECT_FALSE(hm.remove(50));
+}
+
+TEST(HashTableTest, TriggerResizingOnInsert)
+{
+    HashTable<int, int, TestHashTablePolicy> hm;
+    for(int i = 0; i < 16; i++)
+        hm.insert(i, i);
+    for(int j = 0; j < 16; j++)
+        EXPECT_EQ(hm.get(j), j);
+}
+// Standard tests part
+
+/**
+ * Stress tests part
+ */
 #define RANGE_NUMBERS 100000
 #define NB_STEPS_NUMBERS 4
 
 #define RANGE_THREADS 8
 #define NB_STEPS_THREADS 2
 
-using namespace DNFC;
-
 int nb_numbers;
 int nb_threads;
 
-HashTableLf<int, int> *table;
+HashTable<int, int> *table;
 boost::asio::thread_pool pool(RANGE_THREADS);
 
 struct arguments_t
@@ -53,7 +114,7 @@ arguments_t **init(const bool &active_comparison)
   srand(time(NULL));
   std::vector<int> *numbers = get_random_numbers(nb_numbers);
   arguments_t **args = new arguments_t *[nb_threads];
-  table = new HashTableLf<int, int>();
+  table = new HashTable<int, int>();
 
   // We distribute the work per threads
   int divider = nb_numbers / nb_threads;
@@ -134,7 +195,7 @@ int job_remove(arguments_t *args)
   return 1;
 }
 
-TEST(HashTableTest, Insert)
+TEST(HashTableTest, StressInsert)
 {
   test_iterations([](arguments_t **args) {
     for (int i = 0; i < nb_threads; ++i)
@@ -144,7 +205,7 @@ TEST(HashTableTest, Insert)
                   true);
 }
 
-TEST(HashTableTest, Get)
+TEST(HashTableTest, StressGet)
 {
   test_iterations([](arguments_t **args) {
     for (int i = 0; i < nb_threads; ++i)
@@ -158,7 +219,7 @@ TEST(HashTableTest, Get)
                   true);
 }
 
-TEST(HashTableTest, Remove)
+TEST(HashTableTest, StressRemove)
 {
   test_iterations([](arguments_t **args) {
     for (int i = 0; i < nb_threads; ++i)
@@ -172,7 +233,7 @@ TEST(HashTableTest, Remove)
                   true);
 }
 
-TEST(HashTableTest, ConcurrentUpdates)
+TEST(HashTableTest, StressConcurrentUpdates)
 {
   test_iterations([](arguments_t **args) {
     std::vector<std::future<int>> results;
@@ -186,6 +247,7 @@ TEST(HashTableTest, ConcurrentUpdates)
   },
                   false);
 }
+//Stress tests part
 
 int main(int argc, char **argv)
 {
