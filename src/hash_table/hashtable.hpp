@@ -22,7 +22,7 @@ template <typename Key, typename Data, typename Policy = DefaultHashTablePolicy>
 class HashTable
 {
   public:
-    bool insert(Key key, Data data)
+    bool insert(const Key& key, const Data& data)
     {
         std::size_t hash = hashKey(key);
         Node *insertThis = new Node(data, hash);
@@ -100,7 +100,7 @@ class HashTable
         return false;
     }
 
-    Data get(Key key)
+    Data get(const Key& key)
     {
         std::size_t hashValue = hashKey(key);
         std::size_t hash = hashValue;
@@ -157,7 +157,7 @@ class HashTable
         return Data{};
     }
 
-    bool remove(Key key)
+    bool remove(const Key& key)
     {
         std::size_t hashValue = hashKey(key);
         std::size_t hash = hashValue;
