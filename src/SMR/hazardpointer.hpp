@@ -1,5 +1,5 @@
-#ifndef _SMRH_
-#define _SMRH_
+#ifndef _HAZARD_POINTERH_
+#define _HAZARD_POINTERH_
 
 #include <vector>
 #include <atomic>
@@ -139,11 +139,13 @@ public:
    */
   ~HazardPointer()
   {
-    if (ptr.get())
+    std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, Policy>::getMyhp();
+    if (myhp)
     {
-      HazardPointer<T, Policy>::getMyhp()->release(ptr.release());
+      if (ptr.get())
+        myhp->release(ptr.release());
 
-      if (HazardPointerManager::get().nbhp.load(std::memory_order_relaxed) <= 0)
+      if (myhp->nbActivePtrs <= 0)
         HazardPointerManager::get().unsubscribe();
     }
   };
@@ -221,16 +223,19 @@ private:
   struct HazardPointerRecord
   {
     GuardedPointer *rlistHead = nullptr;
+    int nbActivePtrs = 0;
     int nbRetiredPtrs;
 
     std::atomic<bool> active;
-    std::unique_ptr<HazardPointerRecord> next = nullptr;
+    std::unique_ptr<HazardPointerRecord> next;
 
     // Guard a given pointer
     GuardedPointer *guard(T *p)
     {
       GuardedPointer *newPtr = allocPtr();
       newPtr->setPtr(p);
+      nbActivePtrs++;
+
       HazardPointerManager::get().nbhp.fetch_add(1, std::memory_order_relaxed);
       return newPtr;
     }
@@ -242,8 +247,9 @@ private:
       n->markAsDeleted();
       rlistHead = n;
 
-      HazardPointerManager::get().nbhp.fetch_sub(1, std::memory_order_relaxed);
       nbRetiredPtrs++;
+      nbActivePtrs--;
+      HazardPointerManager::get().nbhp.fetch_sub(1, std::memory_order_relaxed);
     }
 
     // Return the GuardedPointer to the memory pool
@@ -268,14 +274,15 @@ private:
       getHpsPriv(output, blockHead.load(std::memory_order_relaxed));
     }
 
-    HazardPointerRecord(HazardPointerRecord *head, bool active) : next(head), nbRetiredPtrs(0), blockHead(nullptr)
+    HazardPointerRecord(HazardPointerRecord *head = nullptr, bool active = true) : next(head), nbRetiredPtrs(0), blockHead(nullptr)
     {
       this->active.store(active, std::memory_order_relaxed);
     }
 
     ~HazardPointerRecord()
     {
-      delete blockHead.load();
+      if (blockHead.load(std::memory_order_relaxed))
+        delete blockHead.load(std::memory_order_relaxed);
     }
 
   private:
@@ -309,6 +316,8 @@ private:
       p->setNext(flistHead);
       p->markAsDeleted();
       flistHead = p;
+
+      nbActivePtrs--;
       HazardPointerManager::get().nbhp.fetch_sub(1, std::memory_order_relaxed);
     }
 
@@ -320,7 +329,7 @@ private:
         if (!g.isDeleted())
           output.push_back(g.ptr.load());
       }
-      if (block->next)
+      if (block && block->next)
         getHpsPriv(output, block->next.get());
     }
   };
@@ -347,7 +356,7 @@ private:
       delete head.load(std::memory_order_relaxed);
     }
 
-    std::atomic<HazardPointerRecord *> head;
+    std::atomic<HazardPointerRecord *> head = nullptr;
     std::atomic<int> nbhp;
 
     /**
@@ -356,9 +365,10 @@ private:
      */
     void subscribe()
     {
-      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, Policy>::getMyhp();
+      int tid = pthread_self() % 1000;
 
       // Prevent subbing more than once
+      std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, Policy>::getMyhp();
       if (myhp.get())
         return;
 
@@ -390,14 +400,14 @@ private:
     /**
      * Unsubscribe the current thread from the manager.
      */
-    static void unsubscribe()
+    void unsubscribe()
     {
       std::unique_ptr<HazardPointerRecord> &myhp = HazardPointer<T, Policy>::getMyhp();
 
       // Prevent unsubscribe more than once
+      int tid = pthread_self() % 1000;
       if (!myhp.get())
         return;
-
       myhp->active.store(false, std::memory_order_relaxed);
       myhp.release();
     }
