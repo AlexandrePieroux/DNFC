@@ -351,12 +351,15 @@ private:
       return m;
     }
 
+    HazardPointerManager(): head(nullptr)
+    {}
+
     ~HazardPointerManager()
     {
       delete head.load(std::memory_order_relaxed);
     }
 
-    std::atomic<HazardPointerRecord *> head = nullptr;
+    std::atomic<HazardPointerRecord *> head;
     std::atomic<int> nbhp;
 
     /**
