@@ -70,7 +70,7 @@ TEST(HashTableTest, TriggerResizingOnInsert)
 /**
  * Stress tests part
  */
-const int nbThreads = 100;
+const int nbThreads = 1024;
 
 TEST(HashTableTest, StressInsert)
 {
@@ -80,7 +80,7 @@ TEST(HashTableTest, StressInsert)
     for (int i = 0; i < nbThreads; i++)
     {
         workers.push_back(std::thread([&hm, i] {
-            hm.insert(i, i);
+            EXPECT_TRUE(hm.insert(i, i));
         }));
     }
 
@@ -97,14 +97,14 @@ TEST(HashTableTest, StressGet)
     for (int i = 0; i < nbThreads; ++i)
     {
         workers.push_back(std::thread([&hm, i] {
-            hm.insert(i, i);
+            EXPECT_TRUE(hm.insert(i, i));
         }));
     }
 
     for (int i = 0; i < nbThreads; ++i)
     {
         workers.push_back(std::thread([&hm, i] {
-            hm.get(i);
+            EXPECT_EQ(hm.get(i), i);
         }));
     }
 
@@ -120,14 +120,14 @@ TEST(HashTableTest, StressRemove)
     for (int i = 0; i < nbThreads; ++i)
     {
         workers.push_back(std::thread([&hm, i] {
-            hm.insert(i, i);
+            EXPECT_TRUE(hm.insert(i, i));
         }));
     }
 
     for (int i = 0; i < nbThreads; ++i)
     {
         workers.push_back(std::thread([&hm, i] {
-            hm.remove(i);
+            EXPECT_TRUE(hm.remove(i));
         }));
     }
 
